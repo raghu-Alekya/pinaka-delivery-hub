@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "composite": true,
     "declarationMap": true,
     "emitDeclarationOnly": true,
@@ -16,6 +17,20 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "es2022",
-    "customConditions": ["@pinaka-delivery-hub/source"]
+    "customConditions": ["@pdh/source"],
+    "paths": {
+      "@pdh/canonical-model": ["libs/canonical-model/src/index.ts"],
+      "@pdh/event-contracts": ["libs/event-contracts/src/index.ts"],
+      "@pdh/connector-sdk": ["libs/connector-sdk/src/index.ts"],
+      "@pdh/observability": ["libs/observability/src/index.ts"],
+      "@pdh/config": ["libs/config/src/index.ts"],
+      "@pdh/auth": ["libs/auth/src/index.ts"],
+      "@pdh/database": ["libs/database/src/index.ts"],
+      "@pdh/messaging": ["libs/messaging/src/index.ts"],
+      "@pdh/redis": ["libs/redis/src/index.ts"],
+      "@pdh/validation": ["libs/validation/src/index.ts"],
+      "@pdh/errors": ["libs/errors/src/index.ts"],
+      "@pdh/testing": ["libs/testing/src/index.ts"]
+    }
   }
 }

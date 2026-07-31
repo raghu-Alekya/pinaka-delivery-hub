@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # Redis Cache & Pub/Sub
+  redis:
+    image: redis:7-alpine
+    container_name: pdh-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # RabbitMQ Event Broker
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: pdh-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  # PostgreSQL Primary Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: pdh-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: pdh_user
+      POSTGRES_PASSWORD: pdh_password
+      POSTGRES_DB: pinaka_delivery_hub
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  redis_data:
+  rabbitmq_data:
+  postgres_data:

@@ -1,0 +1,7 @@
+{
+  "name": "connector-zomato",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "connectors/zomato/src",
+  "projectType": "library",
+  "tags": ["type:connector"]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "observability",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/observability/src",
+  "projectType": "library",
+  "tags": ["type:infrastructure"]
+}

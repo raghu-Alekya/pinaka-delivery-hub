@@ -1,0 +1,7 @@
+{
+  "name": "connector-swiggy",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "connectors/swiggy/src",
+  "projectType": "library",
+  "tags": ["type:connector"]
+}

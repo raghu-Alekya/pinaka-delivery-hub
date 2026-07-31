@@ -1,0 +1,7 @@
+{
+  "name": "connector-grubhub",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "connectors/grubhub/src",
+  "projectType": "library",
+  "tags": ["type:connector"]
+}

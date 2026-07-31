@@ -1,0 +1,7 @@
+{
+  "name": "connector-service",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/connector-service/src",
+  "projectType": "application",
+  "tags": ["type:app"]
+}

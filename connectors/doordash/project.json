@@ -1,0 +1,7 @@
+{
+  "name": "connector-doordash",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "connectors/doordash/src",
+  "projectType": "library",
+  "tags": ["type:connector"]
+}

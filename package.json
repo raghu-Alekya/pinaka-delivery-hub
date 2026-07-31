@@ -2,15 +2,39 @@
   "name": "@pinaka-delivery-hub/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "start:gateway": "nx serve gateway",
+    "start:orders": "nx serve order-service",
+    "start:connectors": "nx serve connector-service",
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "lint": "nx run-many -t lint",
+    "format": "nx format:write",
+    "affected:build": "nx affected -t build",
+    "affected:test": "nx affected -t test",
+    "affected:lint": "nx affected -t lint",
+    "graph": "nx graph"
+  },
   "private": true,
-  "dependencies": {},
   "devDependencies": {
+    "@nx/eslint": "^23.1.0",
     "@nx/js": "23.1.1",
+    "@nx/nest": "^23.1.0",
+    "@nx/node": "^23.1.0",
     "@swc/helpers": "~0.5.18",
+    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/parser": "^8.65.0",
+    "eslint": "^10.8.0",
     "nx": "23.1.1",
     "prettier": "~3.6.2",
     "tslib": "^2.3.0",
     "typescript": "~6.0.3"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/platform-express": "^11.1.28",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
   }
 }

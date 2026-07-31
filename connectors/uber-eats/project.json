@@ -1,0 +1,7 @@
+{
+  "name": "connector-uber-eats",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "connectors/uber-eats/src",
+  "projectType": "library",
+  "tags": ["type:connector"]
+}

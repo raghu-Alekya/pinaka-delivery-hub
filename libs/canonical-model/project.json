@@ -1,0 +1,7 @@
+{
+  "name": "canonical-model",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/canonical-model/src",
+  "projectType": "library",
+  "tags": ["type:model"]
+}

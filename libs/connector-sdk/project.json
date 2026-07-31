@@ -1,0 +1,7 @@
+{
+  "name": "connector-sdk",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/connector-sdk/src",
+  "projectType": "library",
+  "tags": ["type:sdk"]
+}

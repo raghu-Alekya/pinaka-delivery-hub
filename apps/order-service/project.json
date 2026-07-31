@@ -1,0 +1,7 @@
+{
+  "name": "order-service",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/order-service/src",
+  "projectType": "application",
+  "tags": ["type:app"]
+}

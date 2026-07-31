@@ -1,0 +1,7 @@
+{
+  "name": "event-contracts",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/event-contracts/src",
+  "projectType": "library",
+  "tags": ["type:contract"]
+}
