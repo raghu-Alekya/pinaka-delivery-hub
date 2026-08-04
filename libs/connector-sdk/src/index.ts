@@ -15,3 +15,4 @@ export abstract class BaseConnector {
   // Send status update back to third-party platform
   abstract updateOrderStatus(externalOrderId: string, status: string): Promise<ConnectorResponse<boolean>>;
 }
+//added to feature/connector-sdk branch along with - apps/gateway/src/compnents/Liveordermonitor.tsx
