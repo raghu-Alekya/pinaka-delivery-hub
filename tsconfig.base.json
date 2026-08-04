@@ -7,6 +7,7 @@
     "isolatedModules": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+    "jsx": "react-jsx",
     "lib": ["es2022", "dom"],
     "types": ["node"],
     "module": "nodenext",
