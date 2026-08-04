@@ -3,5 +3,13 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "apps/gateway/src",
   "projectType": "application",
-  "tags": ["type:app"]
+  "tags": ["type:app"],
+  "targets": {
+    "serve": {
+      "command": "npx tsx apps/gateway/src/main.ts"
+    },
+    "build": {
+      "command": "npx tsc --noEmit"
+    }
+  }
 }
