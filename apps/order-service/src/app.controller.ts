@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, NotFoundException } from '@nestjs/common';
 import { CanonicalOrder, OrderStatus } from '@pinaka-delivery-hub/canonical-model';
 import { EventEnvelope } from '@pinaka-delivery-hub/event-contracts';
 import { GlobalOrderEventBus } from '@pinaka-delivery-hub/messaging';
@@ -6,18 +6,23 @@ import { GlobalOrderEventBus } from '@pinaka-delivery-hub/messaging';
 // In-Memory Database Store for order domain
 const orderDatabase: CanonicalOrder[] = [];
 
-// Subscribe order-service to Global Event Bus on module load
-GlobalOrderEventBus.subscribe((envelope: EventEnvelope<CanonicalOrder>) => {
+function saveOrderToDb(envelope: EventEnvelope<CanonicalOrder>) {
+  if (!envelope || !envelope.payload) return;
+
   console.log(`[Order Service Received Event] CorrelationID: ${envelope.correlationId}`);
   console.log(`📥 Ingested Order #${envelope.payload.externalOrderId} from ${envelope.payload.platform}`);
 
-  // Store or update order in database
   const existingIdx = orderDatabase.findIndex((o) => o.id === envelope.payload.id);
   if (existingIdx >= 0) {
     orderDatabase[existingIdx] = envelope.payload;
   } else {
     orderDatabase.unshift(envelope.payload);
   }
+}
+
+// Subscribe order-service to Global Event Bus on module load
+GlobalOrderEventBus.subscribe((envelope: EventEnvelope<CanonicalOrder>) => {
+  saveOrderToDb(envelope);
 });
 
 @Controller('api/v1/orders')
@@ -36,6 +41,12 @@ export class AppController {
     return {
       status: 'ready',
     };
+  }
+
+  @Post('events')
+  handleOrderEvent(@Body() envelope: any) {
+    saveOrderToDb(envelope as EventEnvelope<CanonicalOrder>);
+    return { success: true };
   }
 
   @Get()

@@ -8,7 +8,6 @@ export interface MessagePublisher {
   publish(topic: string, message: unknown): Promise<void>;
 }
 
-// In-Memory Shared Event Bus for local zero-dependency execution & fast verification
 class OrderEventBus {
   private listeners: Array<(envelope: EventEnvelope<CanonicalOrder>) => void> = [];
 
@@ -16,9 +15,25 @@ class OrderEventBus {
     this.listeners.push(listener);
   }
 
-  publish(envelope: EventEnvelope<CanonicalOrder>) {
-    console.log(`[RabbitMQ Event Bus Published] EventID: ${envelope.eventId} | Topic: ${envelope.eventType}`);
+  async publish(envelope: EventEnvelope<CanonicalOrder>) {
+    console.log(`[Event Bus Published] EventID: ${envelope.eventId} | Topic: ${envelope.eventType}`);
+    
+    // Notify in-memory listeners in same process
     this.listeners.forEach((listener) => listener(envelope));
+
+    // Dispatch event across process boundary to order-service (Port 3002)
+    try {
+      await fetch('http://localhost:3002/api/v1/orders/events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-correlation-id': envelope.correlationId,
+        },
+        body: JSON.stringify(envelope),
+      });
+    } catch {
+      // Order service might be offline or initializing
+    }
   }
 }
 
