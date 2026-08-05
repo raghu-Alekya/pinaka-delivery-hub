@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Patch, Param, Body, NotFoundException } from '@nestjs/common';
-import { CanonicalOrder, OrderStatus } from '@pinaka-delivery-hub/canonical-model';
+import { Controller, Get, Post, Patch, Param, Body, NotFoundException, UsePipes, ValidationPipe } from '@nestjs/common';
+import { CanonicalOrder } from '@pinaka-delivery-hub/canonical-model';
 import { EventEnvelope } from '@pinaka-delivery-hub/event-contracts';
 import { GlobalOrderEventBus } from '@pinaka-delivery-hub/messaging';
+import { UpdateOrderStatusDto } from '@pinaka-delivery-hub/validation';
 
 // In-Memory Database Store for order domain
 const orderDatabase: CanonicalOrder[] = [];
@@ -20,7 +21,6 @@ function saveOrderToDb(envelope: EventEnvelope<CanonicalOrder>) {
   }
 }
 
-// Subscribe order-service to Global Event Bus on module load
 GlobalOrderEventBus.subscribe((envelope: EventEnvelope<CanonicalOrder>) => {
   saveOrderToDb(envelope);
 });
@@ -71,23 +71,24 @@ export class AppController {
   }
 
   @Patch(':id/status')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   updateOrderStatus(
     @Param('id') id: string,
-    @Body('status') newStatus: OrderStatus
+    @Body() dto: UpdateOrderStatusDto
   ) {
     const order = orderDatabase.find((o) => o.id === id || o.externalOrderId === id);
     if (!order) {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
 
-    order.status = newStatus;
+    order.status = dto.status;
     order.updatedAt = new Date().toISOString();
 
-    console.log(`[Order Service Status Update] Order #${order.externalOrderId} -> Status: ${newStatus}`);
+    console.log(`[Order Service Status Update] Order #${order.externalOrderId} -> Status: ${dto.status}`);
 
     return {
       success: true,
-      message: `Order status updated to ${newStatus}`,
+      message: `Order status updated to ${dto.status}`,
       order,
     };
   }
