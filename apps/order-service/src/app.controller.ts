@@ -1,8 +1,10 @@
-import { Controller, Get, Post, Patch, Param, Body, NotFoundException, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, NotFoundException, BadRequestException } from '@nestjs/common';
 import { CanonicalOrder } from '@pinaka-delivery-hub/canonical-model';
 import { EventEnvelope } from '@pinaka-delivery-hub/event-contracts';
 import { GlobalOrderEventBus } from '@pinaka-delivery-hub/messaging';
 import { UpdateOrderStatusDto } from '@pinaka-delivery-hub/validation';
+import { validate } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
 
 // In-Memory Database Store for order domain
 const orderDatabase: CanonicalOrder[] = [];
@@ -71,11 +73,22 @@ export class AppController {
   }
 
   @Patch(':id/status')
-  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
-  updateOrderStatus(
+  async updateOrderStatus(
     @Param('id') id: string,
-    @Body() dto: UpdateOrderStatusDto
+    @Body() body: any
   ) {
+    // Instantiate and validate DTO explicitly
+    const dto = plainToInstance(UpdateOrderStatusDto, body);
+    const errors = await validate(dto);
+    if (errors.length > 0) {
+      const messages = errors.flatMap((e) => Object.values(e.constraints || {}));
+      throw new BadRequestException({
+        statusCode: 400,
+        message: messages,
+        error: 'Bad Request'
+      });
+    }
+
     const order = orderDatabase.find((o) => o.id === id || o.externalOrderId === id);
     if (!order) {
       throw new NotFoundException(`Order with ID ${id} not found`);
