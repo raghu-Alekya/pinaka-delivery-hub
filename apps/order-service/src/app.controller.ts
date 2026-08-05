@@ -1,10 +1,7 @@
 import { Controller, Get, Post, Patch, Param, Body, NotFoundException, BadRequestException } from '@nestjs/common';
-import { CanonicalOrder } from '@pinaka-delivery-hub/canonical-model';
+import { CanonicalOrder, OrderStatus } from '@pinaka-delivery-hub/canonical-model';
 import { EventEnvelope } from '@pinaka-delivery-hub/event-contracts';
 import { GlobalOrderEventBus } from '@pinaka-delivery-hub/messaging';
-import { UpdateOrderStatusDto } from '@pinaka-delivery-hub/validation';
-import { validate } from 'class-validator';
-import { plainToInstance } from 'class-transformer';
 
 // In-Memory Database Store for order domain
 const orderDatabase: CanonicalOrder[] = [];
@@ -77,14 +74,13 @@ export class AppController {
     @Param('id') id: string,
     @Body() body: any
   ) {
-    // Instantiate and validate DTO explicitly
-    const dto = plainToInstance(UpdateOrderStatusDto, body);
-    const errors = await validate(dto);
-    if (errors.length > 0) {
-      const messages = errors.flatMap((e) => Object.values(e.constraints || {}));
+    const allowedStatuses = Object.values(OrderStatus);
+    
+    // Strict status validation
+    if (!body || !body.status || !allowedStatuses.includes(body.status as OrderStatus)) {
       throw new BadRequestException({
         statusCode: 400,
-        message: messages,
+        message: [`Invalid order status '${body?.status}'. Allowed values: ${allowedStatuses.join(', ')}`],
         error: 'Bad Request'
       });
     }
@@ -94,14 +90,14 @@ export class AppController {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
 
-    order.status = dto.status;
+    order.status = body.status as OrderStatus;
     order.updatedAt = new Date().toISOString();
 
-    console.log(`[Order Service Status Update] Order #${order.externalOrderId} -> Status: ${dto.status}`);
+    console.log(`[Order Service Status Update] Order #${order.externalOrderId} -> Status: ${body.status}`);
 
     return {
       success: true,
-      message: `Order status updated to ${dto.status}`,
+      message: `Order status updated to ${body.status}`,
       order,
     };
   }
