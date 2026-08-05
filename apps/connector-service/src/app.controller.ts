@@ -22,7 +22,7 @@ export class AppController {
   }
 
   @Post('doordash/webhook')
-  handleDoorDashWebhook(
+  async handleDoorDashWebhook(
     @Body() body: any,
     @Headers('x-correlation-id') correlationId?: string
   ) {
@@ -72,8 +72,8 @@ export class AppController {
       payload: canonicalOrder
     };
 
-    // Publish event to Event Bus
-    GlobalOrderEventBus.publish(envelope);
+    // Await event publication to order-service
+    await GlobalOrderEventBus.publish(envelope);
 
     return {
       success: true,
@@ -84,7 +84,7 @@ export class AppController {
   }
 
   @Post('swiggy/webhook')
-  handleSwiggyWebhook(
+  async handleSwiggyWebhook(
     @Body() body: any,
     @Headers('x-correlation-id') correlationId?: string
   ) {
@@ -133,8 +133,8 @@ export class AppController {
       payload: canonicalOrder
     };
 
-    // Publish event to Event Bus
-    GlobalOrderEventBus.publish(envelope);
+    // Await event publication to order-service
+    await GlobalOrderEventBus.publish(envelope);
 
     return {
       success: true,
