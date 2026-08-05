@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Body, Headers } from '@nestjs/common';
 import { CanonicalOrder, OrderStatus, PlatformSource } from '@pinaka-delivery-hub/canonical-model';
+import { EventEnvelope } from '@pinaka-delivery-hub/event-contracts';
+import { GlobalOrderEventBus } from '@pinaka-delivery-hub/messaging';
 
 @Controller('api/v1/connectors')
 export class AppController {
@@ -24,7 +26,8 @@ export class AppController {
     @Body() body: any,
     @Headers('x-correlation-id') correlationId?: string
   ) {
-    console.log(`[DoorDash Webhook Received] CorrelationID: ${correlationId || 'none'}`);
+    const activeCorrelationId = correlationId || `corr_${crypto.randomUUID()}`;
+    console.log(`[DoorDash Webhook Received] CorrelationID: ${activeCorrelationId}`);
 
     // Transform raw DoorDash payload to CanonicalOrder model
     const canonicalOrder: CanonicalOrder = {
@@ -58,9 +61,24 @@ export class AppController {
       updatedAt: new Date().toISOString()
     };
 
+    // Wrap in EventEnvelope
+    const envelope: EventEnvelope<CanonicalOrder> = {
+      eventId: `evt_${crypto.randomUUID()}`,
+      eventType: 'ORDER_RECEIVED',
+      source: 'connector-service',
+      timestamp: new Date().toISOString(),
+      correlationId: activeCorrelationId,
+      version: '1.0.0',
+      payload: canonicalOrder
+    };
+
+    // Publish event to Event Bus
+    GlobalOrderEventBus.publish(envelope);
+
     return {
       success: true,
       orderId: canonicalOrder.id,
+      envelope,
       canonicalOrder
     };
   }
@@ -70,7 +88,8 @@ export class AppController {
     @Body() body: any,
     @Headers('x-correlation-id') correlationId?: string
   ) {
-    console.log(`[Swiggy Webhook Received] CorrelationID: ${correlationId || 'none'}`);
+    const activeCorrelationId = correlationId || `corr_${crypto.randomUUID()}`;
+    console.log(`[Swiggy Webhook Received] CorrelationID: ${activeCorrelationId}`);
 
     // Transform raw Swiggy payload to CanonicalOrder model
     const canonicalOrder: CanonicalOrder = {
@@ -103,9 +122,24 @@ export class AppController {
       updatedAt: new Date().toISOString()
     };
 
+    // Wrap in EventEnvelope
+    const envelope: EventEnvelope<CanonicalOrder> = {
+      eventId: `evt_${crypto.randomUUID()}`,
+      eventType: 'ORDER_RECEIVED',
+      source: 'connector-service',
+      timestamp: new Date().toISOString(),
+      correlationId: activeCorrelationId,
+      version: '1.0.0',
+      payload: canonicalOrder
+    };
+
+    // Publish event to Event Bus
+    GlobalOrderEventBus.publish(envelope);
+
     return {
       success: true,
       orderId: canonicalOrder.id,
+      envelope,
       canonicalOrder
     };
   }
