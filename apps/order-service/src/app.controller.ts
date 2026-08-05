@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Body, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, NotFoundException, ParseEnumPipe } from '@nestjs/common';
 import { CanonicalOrder, OrderStatus } from '@pinaka-delivery-hub/canonical-model';
 import { EventEnvelope } from '@pinaka-delivery-hub/event-contracts';
 import { GlobalOrderEventBus } from '@pinaka-delivery-hub/messaging';
@@ -70,34 +70,23 @@ export class AppController {
   }
 
   @Patch(':id/status')
-  async updateOrderStatus(
+  updateOrderStatus(
     @Param('id') id: string,
-    @Body() body: any
+    @Body('status', new ParseEnumPipe(OrderStatus)) status: OrderStatus
   ) {
-    const allowedStatuses = Object.values(OrderStatus);
-    
-    // Strict status validation
-    if (!body || !body.status || !allowedStatuses.includes(body.status as OrderStatus)) {
-      throw new BadRequestException({
-        statusCode: 400,
-        message: [`Invalid order status '${body?.status}'. Allowed values: ${allowedStatuses.join(', ')}`],
-        error: 'Bad Request'
-      });
-    }
-
     const order = orderDatabase.find((o) => o.id === id || o.externalOrderId === id);
     if (!order) {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
 
-    order.status = body.status as OrderStatus;
+    order.status = status;
     order.updatedAt = new Date().toISOString();
 
-    console.log(`[Order Service Status Update] Order #${order.externalOrderId} -> Status: ${body.status}`);
+    console.log(`[Order Service Status Update] Order #${order.externalOrderId} -> Status: ${status}`);
 
     return {
       success: true,
-      message: `Order status updated to ${body.status}`,
+      message: `Order status updated to ${status}`,
       order,
     };
   }
