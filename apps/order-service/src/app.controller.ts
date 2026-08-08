@@ -8,9 +8,14 @@ import { OrderRepository } from './order.repository';
 const orderRepository = new OrderRepository();
 orderRepository.onModuleInit();
 
-// Global Event Bus Subscription
+// Local Event Bus Subscription
 GlobalOrderEventBus.subscribe((envelope: EventEnvelope<any>) => {
   orderRepository.saveOrderFromEnvelope(envelope);
+});
+
+// RabbitMQ AMQP Queue Consumer Subscription
+GlobalOrderEventBus.subscribeToRabbitMQ(async (envelope: EventEnvelope<any>) => {
+  await orderRepository.saveOrderFromEnvelope(envelope);
 });
 
 @Controller('api/v1/orders')
