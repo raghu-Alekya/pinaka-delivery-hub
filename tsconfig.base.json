@@ -46,6 +46,11 @@
       "@pinaka-delivery-hub/errors": ["./libs/errors/src/index.ts"],
       "@pdh/testing": ["./libs/testing/src/index.ts"],
       "@pinaka-delivery-hub/testing": ["./libs/testing/src/index.ts"]
+      ,"@pinaka-delivery-hub/connector-doordash": ["./connectors/doordash/src/index.ts"]
+      ,"@pinaka-delivery-hub/connector-swiggy": ["./connectors/swiggy/src/index.ts"]
+      ,"@pinaka-delivery-hub/connector-grubhub": ["./connectors/grubhub/src/index.ts"]
+      ,"@pinaka-delivery-hub/connector-uber-eats": ["./connectors/uber-eats/src/index.ts"]
+      ,"@pinaka-delivery-hub/connector-zomato": ["./connectors/zomato/src/index.ts"]
     }
   }
 }

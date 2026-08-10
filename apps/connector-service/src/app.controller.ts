@@ -1,156 +1,135 @@
-import { Controller, Get, Post, Body, Headers, BadRequestException } from '@nestjs/common';
-import { CanonicalOrder, OrderStatus, PlatformSource } from '@pinaka-delivery-hub/canonical-model';
+import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { OrderStatus } from '@pinaka-delivery-hub/canonical-model';
 import { EventEnvelope } from '@pinaka-delivery-hub/event-contracts';
 import { GlobalOrderEventBus } from '@pinaka-delivery-hub/messaging';
-import { CreateDoorDashOrderDto, CreateSwiggyOrderDto } from '@pinaka-delivery-hub/validation';
-import { validate } from 'class-validator';
-import { plainToInstance } from 'class-transformer';
+import {
+  ConnectorContext,
+  ConnectorError,
+  FetchConnectorHttpClient,
+  PlatformConnector,
+  WebhookRequest,
+} from '@pinaka-delivery-hub/connector-sdk';
+import { connectorRegistry } from './connector-registry';
 
 @Controller('api/v1/connectors')
 export class AppController {
+  private readonly httpClient = new FetchConnectorHttpClient();
+  private readonly registry = connectorRegistry;
+
   @Get('health')
-  health() {
-    return {
-      status: 'ok',
-      service: 'connector-service',
-      timestamp: new Date().toISOString(),
-    };
-  }
+  health() { return { status: 'ok', service: 'connector-service', timestamp: new Date().toISOString() }; }
 
   @Get('ready')
-  readiness() {
+  readiness() { return { status: 'ready', registeredConnectors: this.registry.list().length }; }
+
+  @Get()
+  listConnectors() { return { success: true, connectors: this.registry.list().map((connector) => connector.descriptor) }; }
+
+  @Post(':connectorId/webhook')
+  async handleWebhook(
+    @Param('connectorId') connectorId: string,
+    @Body() body: unknown,
+    @Headers() headers: Record<string, string | readonly string[] | undefined>,
+    @Query() query: Record<string, string | readonly string[] | undefined>,
+  ) {
+    const connector = this.getConnector(connectorId);
+    const correlationId = this.header(headers, 'x-correlation-id') ?? `corr_${crypto.randomUUID()}`;
+    console.info(`[Connector Service] connector selected connectorId=${connectorId} correlationId=${correlationId}`);
+    const context = this.createContext(connector, correlationId);
+    const request: WebhookRequest = {
+      method: 'POST',
+      path: `/api/v1/connectors/${connectorId}/webhook`,
+      headers,
+      query,
+      rawBody: new TextEncoder().encode(JSON.stringify(body)),
+      body,
+    };
+    try {
+      if (connector.verifyWebhook) {
+        const verification = await connector.verifyWebhook(request, context);
+        if (!verification.valid) throw new BadRequestException(verification.reason ?? 'Invalid webhook signature');
+      }
+      const events = await connector.parseWebhook(request, context);
+      if (events.length === 0) throw new BadRequestException('Webhook did not contain a supported event');
+      const envelopes: EventEnvelope[] = [];
+      for (const event of events) {
+        console.info(`[Connector Service] publishing parsed event connectorId=${connectorId} eventId=${event.id} correlationId=${correlationId}`);
+        const envelope: EventEnvelope = {
+          eventId: event.id,
+          eventType: 'ORDER_RECEIVED',
+          source: `connector-service:${connectorId}`,
+          timestamp: event.occurredAt,
+          correlationId,
+          version: connector.descriptor.version,
+          payload: event.payload,
+        };
+        await GlobalOrderEventBus.publish(envelope);
+        envelopes.push(envelope);
+      }
+      const canonicalOrder = events[0].payload;
+      console.info(`[Connector Service] webhook completed connectorId=${connectorId} orderId=${canonicalOrder.id} eventCount=${events.length} correlationId=${correlationId}`);
+      return { success: true, orderId: canonicalOrder.id, envelope: envelopes[0], canonicalOrder, eventCount: events.length };
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      if (error instanceof ConnectorError) throw new BadRequestException({ code: error.code, message: error.message });
+      throw error;
+    }
+  }
+
+  @Patch(':connectorId/orders/:externalOrderId/status')
+  async updateOrderStatus(
+    @Param('connectorId') connectorId: string,
+    @Param('externalOrderId') externalOrderId: string,
+    @Body() body: { status: OrderStatus; merchantId?: string },
+    @Headers() headers: Record<string, string | readonly string[] | undefined>,
+  ) {
+    const connector = this.getConnector(connectorId);
+    if (!Object.values(OrderStatus).includes(body.status)) throw new BadRequestException('Invalid order status');
+    const correlationId = this.header(headers, 'x-correlation-id') ?? `corr_${crypto.randomUUID()}`;
+    const merchantId = body.merchantId ?? this.header(headers, 'x-merchant-id') ?? 'default';
+    console.info('[Connector Service] status update accepted locally', {
+      connectorId: connector.descriptor.id,
+      externalOrderId,
+      merchantId,
+      status: body.status,
+      correlationId,
+    });
     return {
-      status: 'ready',
+      success: true,
+      connectorId: connector.descriptor.id,
+      externalOrderId,
+      merchantId,
+      status: body.status,
+      correlationId,
+      metadata: { mode: 'local', platformRequestSent: false },
     };
   }
 
-  @Post('doordash/webhook')
-  async handleDoorDashWebhook(
-    @Body() body: any,
-    @Headers('x-correlation-id') correlationId?: string
-  ) {
-    const dto = plainToInstance(CreateDoorDashOrderDto, body);
-    const errors = await validate(dto);
-    if (errors.length > 0) {
-      const messages = errors.flatMap((e) => Object.values(e.constraints || {}));
-      throw new BadRequestException({ statusCode: 400, message: messages, error: 'Bad Request' });
-    }
+  private getConnector(id: string): PlatformConnector {
+    try { return this.registry.get(id); } catch { throw new NotFoundException(`Connector '${id}' is not registered`); }
+  }
 
-    const activeCorrelationId = correlationId || `corr_${crypto.randomUUID()}`;
-    console.log(`[DoorDash Webhook Received] CorrelationID: ${activeCorrelationId}`);
-
-    const canonicalOrder: CanonicalOrder = {
-      id: `ord_${crypto.randomUUID()}`,
-      merchantId: dto.store_id,
-      externalOrderId: String(dto.order_id),
-      platform: PlatformSource.DOORDASH,
-      status: OrderStatus.CREATED,
-      customer: {
-        fullName: 'DoorDash Customer',
-        phone: '+1000000000',
-      },
-      items: dto.items.map((item: any, idx: number) => ({
-        id: `item_${idx + 1}`,
-        externalItemId: `ITEM-${idx}`,
-        name: item.name,
-        quantity: Number(item.qty),
-        unitPrice: Number(item.price)
-      })),
-      subtotal: Number(dto.total),
-      tax: 0,
-      deliveryFee: 0,
-      totalAmount: Number(dto.total),
-      deliveryAddress: {
-        street: '123 Main St',
-        city: 'Metropolis',
-        zipCode: '10001'
-      },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    const envelope: EventEnvelope<CanonicalOrder> = {
-      eventId: `evt_${crypto.randomUUID()}`,
-      eventType: 'ORDER_RECEIVED',
-      source: 'connector-service',
-      timestamp: new Date().toISOString(),
-      correlationId: activeCorrelationId,
-      version: '1.0.0',
-      payload: canonicalOrder
-    };
-
-    await GlobalOrderEventBus.publish(envelope);
-
+  private createContext(connector: PlatformConnector, correlationId: string, merchantId = 'default'): ConnectorContext {
+    const prefix = connector.descriptor.id.toUpperCase().replace(/-/g, '_');
     return {
-      success: true,
-      orderId: canonicalOrder.id,
-      envelope,
-      canonicalOrder
+      correlationId,
+      httpClient: this.httpClient,
+      logger: console,
+      now: () => new Date(),
+      configuration: {
+        connectorId: connector.descriptor.id,
+        merchantId,
+        settings: { apiBaseUrl: process.env[`${prefix}_API_BASE_URL`] ?? '' },
+        credentials: {
+          apiToken: process.env[`${prefix}_API_TOKEN`] ?? '',
+          apiKey: process.env[`${prefix}_API_KEY`] ?? '',
+        },
+      },
     };
   }
 
-  @Post('swiggy/webhook')
-  async handleSwiggyWebhook(
-    @Body() body: any,
-    @Headers('x-correlation-id') correlationId?: string
-  ) {
-    const dto = plainToInstance(CreateSwiggyOrderDto, body);
-    const errors = await validate(dto);
-    if (errors.length > 0) {
-      const messages = errors.flatMap((e) => Object.values(e.constraints || {}));
-      throw new BadRequestException({ statusCode: 400, message: messages, error: 'Bad Request' });
-    }
-
-    const activeCorrelationId = correlationId || `corr_${crypto.randomUUID()}`;
-    console.log(`[Swiggy Webhook Received] CorrelationID: ${activeCorrelationId}`);
-
-    const canonicalOrder: CanonicalOrder = {
-      id: `ord_${crypto.randomUUID()}`,
-      merchantId: dto.restaurant_id,
-      externalOrderId: String(dto.swiggy_order_id),
-      platform: PlatformSource.SWIGGY,
-      status: OrderStatus.CREATED,
-      customer: {
-        fullName: 'Swiggy Customer',
-        phone: '+919652747307'
-      },
-      items: (dto.cart?.items || []).map((item: any, idx: number) => ({
-        id: `item_${idx + 1}`,
-        externalItemId: `ITEM-${idx}`,
-        name: item.title,
-        quantity: Number(item.quantity),
-        unitPrice: Number(item.price)
-      })),
-      subtotal: Number(dto.final_bill),
-      tax: 0,
-      deliveryFee: 0,
-      totalAmount: Number(dto.final_bill),
-      deliveryAddress: {
-        street: '45 MG Road',
-        city: 'Bengaluru',
-        zipCode: '560001'
-      },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    const envelope: EventEnvelope<CanonicalOrder> = {
-      eventId: `evt_${crypto.randomUUID()}`,
-      eventType: 'ORDER_RECEIVED',
-      source: 'connector-service',
-      timestamp: new Date().toISOString(),
-      correlationId: activeCorrelationId,
-      version: '1.0.0',
-      payload: canonicalOrder
-    };
-
-    await GlobalOrderEventBus.publish(envelope);
-
-    return {
-      success: true,
-      orderId: canonicalOrder.id,
-      envelope,
-      canonicalOrder
-    };
+  private header(headers: Record<string, string | readonly string[] | undefined>, name: string): string | undefined {
+    const value = headers[name];
+    return Array.isArray(value) ? value[0] : value as string | undefined;
   }
 }

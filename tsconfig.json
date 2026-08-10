@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.base.json",
   "compileOnSave": false,
-  "include": ["apps/**/*", "libs/**/*", "packages/**/*"]
+  "include": ["apps/**/*", "libs/**/*", "packages/**/*", "connectors/**/*"]
 }
