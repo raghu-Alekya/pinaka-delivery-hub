@@ -84,18 +84,21 @@ class OrderEventBus {
     // 2. Notify local in-memory listeners
     this.listeners.forEach((listener) => listener(envelope));
 
-    // 3. Fallback HTTP event dispatch to order-service (Port 3002)
-    try {
-      await fetch('http://localhost:3002/api/v1/orders/events', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-correlation-id': envelope.correlationId,
-        },
-        body: JSON.stringify(envelope),
-      });
-    } catch {
-      // Order service HTTP might be offline or initializing
+    // 3. Fallback HTTP event dispatch to order-service (Port 3002) and inventory-service (Port 3005)
+    const targets = ['http://localhost:3002/api/v1/orders/events', 'http://localhost:3005/api/v1/inventory/events'];
+    for (const url of targets) {
+      try {
+        await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-correlation-id': envelope.correlationId,
+          },
+          body: JSON.stringify(envelope),
+        });
+      } catch {
+        // Service might be offline or initializing
+      }
     }
   }
 }

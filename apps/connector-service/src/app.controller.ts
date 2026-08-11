@@ -51,7 +51,7 @@ export class AppController {
       },
       items: dto.items.map((item: any, idx: number) => ({
         id: `item_${idx + 1}`,
-        externalItemId: `ITEM-${idx}`,
+        externalItemId: String(item.item_id || item.externalItemId || 'ITEM-101'),
         name: item.name,
         quantity: Number(item.qty),
         unitPrice: Number(item.price)
@@ -116,7 +116,7 @@ export class AppController {
       },
       items: (dto.cart?.items || []).map((item: any, idx: number) => ({
         id: `item_${idx + 1}`,
-        externalItemId: `ITEM-${idx}`,
+        externalItemId: String(item.item_id || item.externalItemId || 'ITEM-101'),
         name: item.title,
         quantity: Number(item.quantity),
         unitPrice: Number(item.price)
