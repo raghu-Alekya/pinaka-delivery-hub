@@ -104,6 +104,7 @@ class OrderEventBus {
     const publishedToRabbitMq = this.publishToRabbitMQ(envelope);
     this.listeners.forEach((listener) => listener(envelope));
 
+<<<<<<< HEAD
     if (!publishedToRabbitMq) await this.publishThroughHttpFallback(envelope);
   }
 
@@ -131,6 +132,23 @@ class OrderEventBus {
       if (!response.ok) console.error(`[HTTP Event Fallback] Failed with status ${response.status}`);
     } catch (error) {
       console.error(`[HTTP Event Fallback] Order service unavailable: ${errorMessage(error)}`);
+=======
+    // 3. Fallback HTTP event dispatch to order-service (Port 3002) and inventory-service (Port 3005)
+    const targets = ['http://localhost:3002/api/v1/orders/events', 'http://localhost:3005/api/v1/inventory/events'];
+    for (const url of targets) {
+      try {
+        await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-correlation-id': envelope.correlationId,
+          },
+          body: JSON.stringify(envelope),
+        });
+      } catch {
+        // Service might be offline or initializing
+      }
+>>>>>>> d65f6606537d9f83fccd67ab3d69598786576bb8
     }
   }
 }

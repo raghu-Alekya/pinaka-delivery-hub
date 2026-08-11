@@ -105,9 +105,68 @@ export class AppController {
     };
   }
 
+<<<<<<< HEAD
   private getConnector(id: string): PlatformConnector {
     try { return this.registry.get(id); } catch { throw new NotFoundException(`Connector '${id}' is not registered`); }
   }
+=======
+  @Post('doordash/webhook')
+  async handleDoorDashWebhook(
+    @Body() body: any,
+    @Headers('x-correlation-id') correlationId?: string
+  ) {
+    const dto = plainToInstance(CreateDoorDashOrderDto, body);
+    const errors = await validate(dto);
+    if (errors.length > 0) {
+      const messages = errors.flatMap((e) => Object.values(e.constraints || {}));
+      throw new BadRequestException({ statusCode: 400, message: messages, error: 'Bad Request' });
+    }
+
+    const activeCorrelationId = correlationId || `corr_${crypto.randomUUID()}`;
+    console.log(`[DoorDash Webhook Received] CorrelationID: ${activeCorrelationId}`);
+
+    const canonicalOrder: CanonicalOrder = {
+      id: `ord_${crypto.randomUUID()}`,
+      merchantId: dto.store_id,
+      externalOrderId: String(dto.order_id),
+      platform: PlatformSource.DOORDASH,
+      status: OrderStatus.CREATED,
+      customer: {
+        fullName: 'DoorDash Customer',
+        phone: '+1000000000',
+      },
+      items: dto.items.map((item: any, idx: number) => ({
+        id: `item_${idx + 1}`,
+        externalItemId: String(item.item_id || item.externalItemId || 'ITEM-101'),
+        name: item.name,
+        quantity: Number(item.qty),
+        unitPrice: Number(item.price)
+      })),
+      subtotal: Number(dto.total),
+      tax: 0,
+      deliveryFee: 0,
+      totalAmount: Number(dto.total),
+      deliveryAddress: {
+        street: '123 Main St',
+        city: 'Metropolis',
+        zipCode: '10001'
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const envelope: EventEnvelope<CanonicalOrder> = {
+      eventId: `evt_${crypto.randomUUID()}`,
+      eventType: 'ORDER_RECEIVED',
+      source: 'connector-service',
+      timestamp: new Date().toISOString(),
+      correlationId: activeCorrelationId,
+      version: '1.0.0',
+      payload: canonicalOrder
+    };
+
+    await GlobalOrderEventBus.publish(envelope);
+>>>>>>> d65f6606537d9f83fccd67ab3d69598786576bb8
 
   private createContext(connector: PlatformConnector, correlationId: string, merchantId = 'default'): ConnectorContext {
     const prefix = connector.descriptor.id.toUpperCase().replace(/-/g, '_');
@@ -128,8 +187,74 @@ export class AppController {
     };
   }
 
+<<<<<<< HEAD
   private header(headers: Record<string, string | readonly string[] | undefined>, name: string): string | undefined {
     const value = headers[name];
     return Array.isArray(value) ? value[0] : value as string | undefined;
+=======
+  @Post('swiggy/webhook')
+  async handleSwiggyWebhook(
+    @Body() body: any,
+    @Headers('x-correlation-id') correlationId?: string
+  ) {
+    const dto = plainToInstance(CreateSwiggyOrderDto, body);
+    const errors = await validate(dto);
+    if (errors.length > 0) {
+      const messages = errors.flatMap((e) => Object.values(e.constraints || {}));
+      throw new BadRequestException({ statusCode: 400, message: messages, error: 'Bad Request' });
+    }
+
+    const activeCorrelationId = correlationId || `corr_${crypto.randomUUID()}`;
+    console.log(`[Swiggy Webhook Received] CorrelationID: ${activeCorrelationId}`);
+
+    const canonicalOrder: CanonicalOrder = {
+      id: `ord_${crypto.randomUUID()}`,
+      merchantId: dto.restaurant_id,
+      externalOrderId: String(dto.swiggy_order_id),
+      platform: PlatformSource.SWIGGY,
+      status: OrderStatus.CREATED,
+      customer: {
+        fullName: 'Swiggy Customer',
+        phone: '+919652747307'
+      },
+      items: (dto.cart?.items || []).map((item: any, idx: number) => ({
+        id: `item_${idx + 1}`,
+        externalItemId: String(item.item_id || item.externalItemId || 'ITEM-101'),
+        name: item.title,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.price)
+      })),
+      subtotal: Number(dto.final_bill),
+      tax: 0,
+      deliveryFee: 0,
+      totalAmount: Number(dto.final_bill),
+      deliveryAddress: {
+        street: '45 MG Road',
+        city: 'Bengaluru',
+        zipCode: '560001'
+      },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const envelope: EventEnvelope<CanonicalOrder> = {
+      eventId: `evt_${crypto.randomUUID()}`,
+      eventType: 'ORDER_RECEIVED',
+      source: 'connector-service',
+      timestamp: new Date().toISOString(),
+      correlationId: activeCorrelationId,
+      version: '1.0.0',
+      payload: canonicalOrder
+    };
+
+    await GlobalOrderEventBus.publish(envelope);
+
+    return {
+      success: true,
+      orderId: canonicalOrder.id,
+      envelope,
+      canonicalOrder
+    };
+>>>>>>> d65f6606537d9f83fccd67ab3d69598786576bb8
   }
 }
