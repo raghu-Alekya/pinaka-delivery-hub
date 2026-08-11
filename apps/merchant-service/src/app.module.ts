@@ -1,9 +1,10 @@
-﻿import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
+import { MerchantRepository } from './merchant.repository';
 
 @Module({
   imports: [],
   controllers: [AppController],
-  providers: [],
+  providers: [MerchantRepository],
 })
 export class AppModule {}
