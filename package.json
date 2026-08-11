@@ -18,23 +18,42 @@
   "private": true,
   "devDependencies": {
     "@nx/eslint": "^23.1.0",
+    "@nx/eslint-plugin": "^23.1.0",
     "@nx/js": "23.1.1",
     "@nx/nest": "^23.1.0",
     "@nx/node": "^23.1.0",
     "@swc/helpers": "~0.5.18",
+    "@types/amqplib": "^0.10.6",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
     "eslint": "^10.8.0",
     "nx": "23.1.1",
     "prettier": "~3.6.2",
     "tslib": "^2.3.0",
+    "tsx": "^4.19.2",
     "typescript": "~6.0.3"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",
     "@nestjs/core": "^11.1.28",
+    "@nestjs/microservices": "^11.1.28",
     "@nestjs/platform-express": "^11.1.28",
+    "@nestjs/typeorm": "^11.0.0",
+    "amqplib": "^0.10.5",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "ioredis": "^5.4.1",
+    "pg": "^8.13.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "typeorm": "^0.3.20"
+  },
+  "overrides": {
+    "commander": "^10.0.1"
   }
 }

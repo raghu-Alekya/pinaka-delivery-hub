@@ -10,6 +10,17 @@ services:
     volumes:
       - redis_data:/data
 
+  # Redis Commander Web GUI Dashboard
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: pdh-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    depends_on:
+      - redis
+
   # RabbitMQ Event Broker
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -35,6 +46,18 @@ services:
       POSTGRES_DB: pinaka_delivery_hub
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  # pgAdmin Web Database Management Dashboard
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pdh-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@pdh.com
+      PGADMIN_DEFAULT_PASSWORD: pdh_password
+    depends_on:
+      - postgres
 
 volumes:
   redis_data:

@@ -7,6 +7,7 @@ packages:
 
 autoInstallPeers: true
 allowBuilds:
+  esbuild: set this to true or false
   nx: true
   unrs-resolver: true
 minimumReleaseAgeExclude:
