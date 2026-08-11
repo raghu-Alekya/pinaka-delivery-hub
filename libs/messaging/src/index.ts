@@ -101,11 +101,11 @@ class OrderEventBus {
     console.log(`[Event Bus Published] EventID: ${envelope.eventId} | Topic: ${envelope.eventType}`);
     await this.initRabbitMQ();
 
-    const publishedToRabbitMq = this.publishToRabbitMQ(envelope);
+    this.publishToRabbitMQ(envelope);
     this.listeners.forEach((listener) => listener(envelope));
 
-<<<<<<< HEAD
-    if (!publishedToRabbitMq) await this.publishThroughHttpFallback(envelope);
+    // Dispatch to HTTP targets so all active microservices (order, inventory, analytics) receive the event
+    await this.publishThroughHttpFallback(envelope);
   }
 
   private publishToRabbitMQ(envelope: EventEnvelope<CanonicalOrder>): boolean {
@@ -122,33 +122,21 @@ class OrderEventBus {
   }
 
   private async publishThroughHttpFallback(envelope: EventEnvelope<CanonicalOrder>): Promise<void> {
-    console.warn(`[HTTP Event Fallback] RabbitMQ unavailable; dispatching EventID: ${envelope.eventId}`);
-    try {
-      const response = await fetch('http://localhost:3002/api/v1/orders/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-correlation-id': envelope.correlationId },
-        body: JSON.stringify(envelope),
-      });
-      if (!response.ok) console.error(`[HTTP Event Fallback] Failed with status ${response.status}`);
-    } catch (error) {
-      console.error(`[HTTP Event Fallback] Order service unavailable: ${errorMessage(error)}`);
-=======
-    // 3. Fallback HTTP event dispatch to order-service (Port 3002) and inventory-service (Port 3005)
-    const targets = ['http://localhost:3002/api/v1/orders/events', 'http://localhost:3005/api/v1/inventory/events'];
+    const targets = [
+      'http://localhost:3002/api/v1/orders/events',
+      'http://localhost:3005/api/v1/inventory/events',
+      'http://localhost:3006/api/v1/analytics/events',
+    ];
     for (const url of targets) {
       try {
         await fetch(url, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-correlation-id': envelope.correlationId,
-          },
+          headers: { 'Content-Type': 'application/json', 'x-correlation-id': envelope.correlationId },
           body: JSON.stringify(envelope),
         });
       } catch {
         // Service might be offline or initializing
       }
->>>>>>> d65f6606537d9f83fccd67ab3d69598786576bb8
     }
   }
 }
