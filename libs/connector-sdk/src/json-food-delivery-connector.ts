@@ -37,6 +37,13 @@ function first(source: JsonRecord, fields: readonly string[]): unknown {
 }
 function text(value: unknown, fallback = ''): string { return value === undefined || value === null ? fallback : String(value); }
 function number(value: unknown): number { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
+function requiredNumber(value: unknown, field: string, options: { integer?: boolean; min?: number } = {}): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) throw new ConnectorError(`${field} must be a number`, 'INVALID_WEBHOOK_NUMBER', false, 400);
+  if (options.integer && !Number.isInteger(parsed)) throw new ConnectorError(`${field} must be an integer`, 'INVALID_WEBHOOK_NUMBER', false, 400);
+  if (options.min !== undefined && parsed < options.min) throw new ConnectorError(`${field} must be at least ${options.min}`, 'INVALID_WEBHOOK_NUMBER', false, 400);
+  return parsed;
+}
 
 export class JsonFoodDeliveryConnector implements PlatformConnector {
   readonly descriptor: ConnectorDescriptor;
@@ -56,17 +63,22 @@ export class JsonFoodDeliveryConnector implements PlatformConnector {
     if (!externalOrderId) throw new ConnectorError('Webhook order id is required', 'INVALID_WEBHOOK_ORDER_ID', false, 400);
     if (!merchantId) throw new ConnectorError('Webhook merchant id is required', 'INVALID_WEBHOOK_MERCHANT_ID', false, 400);
     const rawItems = first(body, this.options.itemsFields);
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      throw new ConnectorError('Webhook must contain at least one order item', 'INVALID_WEBHOOK_ITEMS', false, 400);
+    }
     const items = (Array.isArray(rawItems) ? rawItems : []).map((value, index) => {
       const item = record(value);
+      const name = text(first(item, this.options.itemNameFields)).trim();
+      if (!name) throw new ConnectorError(`items[${index}].name is required`, 'INVALID_WEBHOOK_ITEM_NAME', false, 400);
       return {
         id: `item_${index + 1}`,
-        externalItemId: text(first(item, ['id', 'item_id', 'itemId', 'sku']), `ITEM-${index + 1}`),
-        name: text(first(item, this.options.itemNameFields), 'Unknown item'),
-        quantity: number(first(item, this.options.itemQuantityFields)) || 1,
-        unitPrice: number(first(item, this.options.itemPriceFields)),
+        externalItemId: text(first(item, ['id', 'external_id', 'item_id', 'itemId', 'product_id', 'sku']), `ITEM-${index + 1}`),
+        name,
+        quantity: requiredNumber(first(item, this.options.itemQuantityFields), `items[${index}].quantity`, { integer: true, min: 1 }),
+        unitPrice: requiredNumber(first(item, this.options.itemPriceFields), `items[${index}].unitPrice`, { min: 0 }),
       };
     });
-    const total = number(first(body, this.options.totalFields));
+    const total = requiredNumber(first(body, this.options.totalFields), 'totalAmount', { min: 0 });
     const now = context.now().toISOString();
     const order: CanonicalOrder = {
       id: `ord_${crypto.randomUUID()}`,
