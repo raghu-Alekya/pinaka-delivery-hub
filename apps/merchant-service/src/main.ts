@@ -8,7 +8,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.useGlobalInterceptors(new TracingInterceptor());
-  const port = process.env.PORT || 3003;
+  const port = process.env.MERCHANT_SERVICE_PORT || 3003;
   await app.listen(port);
   console.log(`🚀 Merchant Service running on http://localhost:${port}`);
 }

@@ -9,6 +9,7 @@ import {
   Param,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { CanonicalOrder } from '@pinaka-delivery-hub/canonical-model';
 import { EventEnvelope } from '@pinaka-delivery-hub/event-contracts';
@@ -54,6 +55,7 @@ export class AppController {
     @Body() body: unknown,
     @Headers() headers: Record<string, string | string[] | undefined>,
     @Query() query: Record<string, string | string[] | undefined>,
+    @Req() request: { rawBody?: Buffer },
   ) {
     const normalizedConnectorId = connectorId.trim().toLowerCase();
     let connector;
@@ -83,6 +85,7 @@ export class AppController {
         credentials: {
           apiToken: process.env[`${envPrefix}_API_TOKEN`] || '',
           apiKey: process.env[`${envPrefix}_API_KEY`] || '',
+          webhookSecret: process.env[`${envPrefix}_WEBHOOK_SECRET`] || '',
         },
       },
       correlationId: activeCorrelationId,
@@ -100,7 +103,7 @@ export class AppController {
       path: `/api/v1/connectors/${normalizedConnectorId}/webhook`,
       headers,
       query,
-      rawBody: Buffer.from(JSON.stringify(body)),
+      rawBody: request.rawBody ?? Buffer.from(JSON.stringify(body)),
       body,
     };
 
@@ -163,9 +166,9 @@ export class AppController {
     const defaultProductId = Number(process.env.POS_DEFAULT_PRODUCT_ID || 1652);
 
     const parent = await this.postPosOrder({
-      flag_type: 'parent_takeaway_order',
+      flag_type: 'parent_online_order',
       restaurant_id: restaurantId,
-      created_via: 'takeaway',
+      created_via: 'online',
       order_datetime: new Date().toISOString(),
     });
 
@@ -182,12 +185,20 @@ export class AppController {
       restaurant_id: restaurantId,
       captain_id: captainId,
       line_items: order.items.map((item) => ({
-        product_id: Number(item.externalItemId) || defaultProductId,
+        product_id: this.resolvePosProductId(item.externalItemId, defaultProductId),
         quantity: item.quantity,
       })),
     });
 
     return { parentOrderId, parent, kot };
+  }
+
+  private resolvePosProductId(externalItemId: string, fallback: number): number {
+    const exact = Number(externalItemId);
+    if (Number.isInteger(exact) && exact > 0) return exact;
+    const numericSuffix = externalItemId.match(/(\d+)$/)?.[1];
+    const parsedSuffix = numericSuffix ? Number(numericSuffix) : NaN;
+    return Number.isInteger(parsedSuffix) && parsedSuffix > 0 ? parsedSuffix : fallback;
   }
 
   private async postPosOrder(payload: Record<string, unknown>): Promise<any> {

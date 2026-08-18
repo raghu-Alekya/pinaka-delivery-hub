@@ -12,10 +12,10 @@ try {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.useGlobalInterceptors(new TracingInterceptor());
-  const port = process.env.PORT || 3001;
+  const port = process.env.CONNECTOR_SERVICE_PORT || 3001;
   await app.listen(port);
   console.log(`🚀 Connector Service running on http://localhost:${port}`);
 }

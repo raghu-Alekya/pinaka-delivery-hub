@@ -8,7 +8,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.useGlobalInterceptors(new TracingInterceptor());
-  const port = process.env.PORT || 3006;
+  const port = process.env.ANALYTICS_SERVICE_PORT || 3006;
   await app.listen(port);
   console.log(`🚀 Analytics Service running on http://localhost:${port}`);
 }
