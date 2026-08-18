@@ -1,0 +1,10 @@
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { PosRepository } from './pos.repository';
+
+@Module({
+  imports: [],
+  controllers: [AppController],
+  providers: [PosRepository],
+})
+export class AppModule {}

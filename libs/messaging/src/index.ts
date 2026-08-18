@@ -126,6 +126,7 @@ class OrderEventBus {
       'http://localhost:3002/api/v1/orders/events',
       'http://localhost:3005/api/v1/inventory/events',
       'http://localhost:3006/api/v1/analytics/events',
+      'http://localhost:3007/api/v1/pos/events',
     ];
     for (const url of targets) {
       try {

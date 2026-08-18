@@ -37,6 +37,7 @@ Start-Microservice -Name "Merchant Service" -Command "npx nx serve merchant-serv
 Start-Microservice -Name "Menu Service" -Command "npx nx serve menu-service" -Port 3004
 Start-Microservice -Name "Inventory Service" -Command "npx nx serve inventory-service" -Port 3005
 Start-Microservice -Name "Analytics Service" -Command "npx nx serve analytics-service" -Port 3006
+Start-Microservice -Name "POS Integration Service" -Command "npx nx serve pos-integration-service" -Port 3007
 
 # 4. Display Final Status Banner
 Start-Sleep -Seconds 3
@@ -52,6 +53,7 @@ Write-Host "MERCHANT STORE SERVICE:      http://localhost:3003" -ForegroundColor
 Write-Host "MENU AND 86-ITEM SERVICE:    http://localhost:3004" -ForegroundColor White
 Write-Host "INVENTORY AND STOCK SERVICE: http://localhost:3005" -ForegroundColor White
 Write-Host "REVENUE ANALYTICS SERVICE:   http://localhost:3006" -ForegroundColor White
+Write-Host "POS INTEGRATION SERVICE:     http://localhost:3007" -ForegroundColor White
 Write-Host ""
 Write-Host "INFRASTRUCTURE MANAGEMENT DASHBOARDS:" -ForegroundColor Yellow
 Write-Host "pgAdmin 4 (PostgreSQL Web UI): http://localhost:5050 (admin@pdh.com / pdh_password)" -ForegroundColor Gray
