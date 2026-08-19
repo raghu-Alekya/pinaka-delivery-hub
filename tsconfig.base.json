@@ -51,6 +51,7 @@
       ,"@pinaka-delivery-hub/connector-grubhub": ["./connectors/grubhub/src/index.ts"]
       ,"@pinaka-delivery-hub/connector-uber-eats": ["./connectors/uber-eats/src/index.ts"]
       ,"@pinaka-delivery-hub/connector-zomato": ["./connectors/zomato/src/index.ts"]
+      ,"@pinaka-delivery-hub/connector-orderout": ["./connectors/orderout/src/index.ts"]
     }
   }
 }

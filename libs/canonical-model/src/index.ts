@@ -15,6 +15,7 @@ export enum PlatformSource {
   SWIGGY = 'SWIGGY',
   ZOMATO = 'ZOMATO',
   WOOCOMMERCE = 'WOOCOMMERCE',
+  ORDEROUT = 'ORDEROUT',
 }
 
 export interface OrderCustomer {

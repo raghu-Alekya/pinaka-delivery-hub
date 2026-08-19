@@ -1,0 +1,7 @@
+{
+  "name": "connector-orderout",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "connectors/orderout/src",
+  "projectType": "library",
+  "tags": ["type:connector"]
+}

@@ -7,35 +7,6 @@ import { PosSyncLogEntity } from './pos.entity';
 
 const CACHE_TTL_SECONDS = 300; // 5 minutes cache TTL
 
-// Comprehensive Live WooCommerce Catalog Product ID Map for https://merchantrestaurant.alektasolutions.com/
-const WOOCOMMERCE_CATALOG_MAP: Record<string, number> = {
-  'paneer tikka': 13843,
-  'chicken tikka': 1972,
-  'chicken tandoori': 1972,
-  'tandoori chicken': 1972,
-  'special chicken biryani': 4218,
-  'chicken curry': 5823,
-  'butter chicken': 1920,
-  'chicken tikka masala': 1922,
-  'chicken 65': 1968,
-  'chicken lollipop': 1970,
-  'pepper chicken': 1976,
-  'chicken manchurian': 1974,
-  'bbq chicken wings': 2000,
-  'chicken popcorn': 1998,
-  'mutton seekh kebab': 1978,
-  'mutton curry': 1924,
-  'tandoori mushroom': 13845,
-  'mushroom tandoori': 14152,
-  'veg seekh kebab': 13847,
-  'capsicum tandoori': 14147,
-  'thumbs up': 16725,
-  'coke': 6880,
-  'cola': 6926,
-  'beer': 7999,
-  'corona': 6412,
-  'order amount': 8974,
-};
 
 @Injectable()
 export class PosRepository implements OnModuleInit {
@@ -106,24 +77,6 @@ export class PosRepository implements OnModuleInit {
     }
   }
 
-  private resolveWooCommerceProductId(itemName?: string, itemId?: string): number {
-    // 1. Check numeric externalItemId
-    const parsedId = parseInt(String(itemId), 10);
-    if (!isNaN(parsedId) && parsedId > 0) return parsedId;
-
-    // 2. Match catalog name
-    if (itemName) {
-      const lowerName = itemName.toLowerCase().trim();
-      for (const [key, prodId] of Object.entries(WOOCOMMERCE_CATALOG_MAP)) {
-        if (lowerName.includes(key) || key.includes(lowerName)) {
-          return prodId;
-        }
-      }
-    }
-
-    // 3. Fallback to generic Order Amount Product ID (8974) or Paneer Tikka (13843)
-    return 1972; // Default to Chicken Tikka (1972) if name contains chicken, or 8974
-  }
 
   async syncOrderToLivePOS(envelope: EventEnvelope<CanonicalOrder>): Promise<PosSyncLogEntity> {
     const order = envelope.payload;
@@ -149,110 +102,97 @@ export class PosRepository implements OnModuleInit {
 
     console.log(`📡 [POS Sync Relay] Relay order #${order.externalOrderId} to POS target: ${targetUrl} (Store: ${merchantId})`);
 
-
-
-    // Build line items matching live WooCommerce Product IDs and custom webhook name & price overrides
-    const lineItems = (order.items || []).map((item) => {
-      const productId = this.resolveWooCommerceProductId(item.name, item.externalItemId);
-      const itemPrice = Number(item.unitPrice || 0);
-      const itemQty = Number(item.quantity || 1);
-      const itemTotal = (itemPrice * itemQty).toFixed(2);
-
-      return {
-        product_id: productId,
-        name: item.name || 'Online Item', // Custom Name Override for POS Receipt/Screen
-        quantity: itemQty,
-        subtotal: String(itemTotal),
-        total: String(itemTotal),
-      };
-    });
-
-    if (lineItems.length === 0) {
-      const fallbackTotal = Number(order.totalAmount || order.subtotal || 199).toFixed(2);
-      lineItems.push({ product_id: 1972, name: 'Chicken Tandoori', quantity: 1, subtotal: String(fallbackTotal), total: String(fallbackTotal) });
-    }
-
-    // ── Use Pinaka POS custom endpoint so the plugin writes order_type = 'Online Order'
-    // to its custom DB table — making the WooCommerce admin column show correctly.
-    const posPayload = {
-      flag_type: 'parent_online_order',
-      restaurant_id: 1,
-      created_via: 'online',
-      order_type: 'Online Order',
-      order_datetime: new Date().toISOString(),
-      customer_note: `Online Order #${order.externalOrderId} via ${order.platform || 'DoorDash'}`,
-      billing: {
-        first_name: order.customer?.fullName?.split(' ')[0] || 'Online',
-        last_name: order.customer?.fullName?.split(' ')[1] || 'Customer',
-        phone: order.customer?.phone || '+919876543210',
-        address_1: order.deliveryAddress?.street || 'Online Order',
-        city: order.deliveryAddress?.city || 'Bengaluru',
-        postcode: order.deliveryAddress?.zipCode || '560001',
-      },
-      line_items: lineItems,
-      meta_data: [
-        { key: '_order_type',        value: 'Online Order' },
-        { key: '_online_order',      value: 'yes' },
-        { key: '_external_order_id', value: order.externalOrderId },
-        { key: '_channel',           value: order.platform || 'DOORDASH' },
-        { key: '_store_id',          value: merchantId },
-        { key: 'is_pos_online',      value: 'yes' },
-      ],
-    };
-    // Pinaka POS endpoint requires Bearer JWT, not Basic auth
-    const posJwtToken = process.env.PINAKA_POS_JWT_TOKEN ||
-      'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczpcL1wvbWVyY2hhbnRyZXN0YXVyYW50LmFsZWt0YXNvbHV0aW9ucy5jb20iLCJpYXQiOjE3ODY1MDk1MzMsIm5iZiI6MTc4NjUwOTUzMywiZXhwIjoxNzg5MTAxNTMzLCJkYXRhIjp7InVzZXIiOnsiaWQiOjUsImRldmljZSI6IiIsInBhc3MiOiIyYjhlMjJlOTM2ZTY0N2JhNDRmOWJhMmY3Y2Q1ZmFjNiJ9fX0.R7_4kHcFW6CnHbyrscNtcSG8KX3z110dKHfr66hLt68';
-    const authHeader = `Bearer ${posJwtToken}`;
-    const requestUrl = `${targetUrl.replace(/\/$/, '')}/wp-json/pinaka-restaurant-pos/v1/orders`;
+    const restaurantId     = Number(process.env.POS_RESTAURANT_ID      || 1);
+    const captainId        = Number(process.env.POS_CAPTAIN_ID         || 1);
+    const defaultProductId = Number(process.env.POS_DEFAULT_PRODUCT_ID || 1972);
 
     let syncStatus = 'FAILED';
+    let parentOrderId: string | number | undefined;
+    let parentRes: any;
+    let kotRes: any;
 
     try {
-      const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': authHeader,
+      // ── Step 1: Create parent online order ──────────────────────────────────
+      parentRes = await this.postPosOrder({
+        flag_type:      'parent_online_order',
+        restaurant_id:  restaurantId,
+        created_via:    'online',
+        order_type:     'Online Order',
+        order_datetime: new Date().toISOString(),
+        customer_note:  `Online Order #${order.externalOrderId} via ${order.platform || 'DoorDash'}`,
+        billing: {
+          first_name: order.customer?.fullName?.split(' ')[0] || 'Online',
+          last_name:  order.customer?.fullName?.split(' ')[1] || 'Customer',
+          phone:      order.customer?.phone || '+919876543210',
+          address_1:  order.deliveryAddress?.street || 'Online Order',
+          city:       order.deliveryAddress?.city   || 'Bengaluru',
+          postcode:   order.deliveryAddress?.zipCode || '560001',
         },
-        body: JSON.stringify(posPayload),
+        meta_data: [
+          { key: '_order_type',        value: 'Online Order' },
+          { key: '_online_order',      value: 'yes' },
+          { key: '_external_order_id', value: order.externalOrderId },
+          { key: '_channel',           value: order.platform || 'DOORDASH' },
+          { key: '_store_id',          value: merchantId },
+          { key: 'is_pos_online',      value: 'yes' },
+        ],
       });
 
-      const resData: any = await response.json();
-
-      if (response.ok || response.status === 201 || response.status === 200) {
-        syncStatus = 'SYNCED_TO_POS';
-        console.log(`✅ [POS Sync Success] Online Order #${order.externalOrderId} → Pinaka POS Order ID: #${resData.id} | Order Type: Online Order | Total: ₹${resData.total || order.totalAmount}`);
+      parentOrderId = this.extractPosOrderId(parentRes);
+      if (parentOrderId === undefined) {
+        syncStatus = 'FAILED_PARENT';
+        console.warn(`⚠️ [POS Sync] Parent order created but no id returned for #${order.externalOrderId}: ${JSON.stringify(parentRes)}`);
       } else {
-        syncStatus = `FAILED_${response.status}`;
-        console.warn(`⚠️ [POS Sync Error ${response.status}] Pinaka POS error: ${resData.code || resData.message || JSON.stringify(resData)}`);
+        console.log(`✅ [POS Parent OK] Order #${order.externalOrderId} → Pinaka POS Parent ID: #${parentOrderId}`);
+
+        // ── Step 2: Create KOT linked to parent ──────────────────────────────
+        kotRes = await this.postPosOrder({
+          flag_type:       'kot_order',
+          parent_order_id: parentOrderId,
+          restaurant_id:   restaurantId,
+          captain_id:      captainId,
+          line_items: (order.items || []).map((item) => ({
+            product_id: this.resolvePosProductId(item.externalItemId, defaultProductId),
+            quantity:   Number(item.quantity || 1),
+          })),
+        });
+
+        console.log(`✅ [POS KOT OK] KOT linked to Parent #${parentOrderId} | Order Type: Online Order | Total: ₹${parentRes.total || order.totalAmount}`);
+        syncStatus = 'SYNCED_TO_POS';
       }
     } catch (err: any) {
-      console.warn(`⚠️ [POS Sync Relay Exception] (${targetUrl}): ${err.message}`);
+      if (syncStatus === 'FAILED' || syncStatus === 'FAILED_PARENT') {
+        console.warn(`⚠️ [POS Sync Relay Exception] (${targetUrl}): ${err.message}`);
+      } else {
+        syncStatus = 'FAILED_KOT';
+        console.warn(`⚠️ [POS KOT Exception] Parent #${parentOrderId} created but KOT failed: ${err.message}`);
+      }
     }
 
-    // Persist POS Sync Log in PostgreSQL Table 'pos_sync_logs'
+    // ── Persist POS Sync Log in PostgreSQL ──────────────────────────────────
+    const logPayload = { parentRes, kotRes };
     let logEntry: PosSyncLogEntity;
     if (this.isDbConnected && this.posLogRepo) {
       const entity = this.posLogRepo.create({
         merchantId,
         externalOrderId: order.externalOrderId,
-        posSystemType: 'WOOCOMMERCE_REST',
-        status: syncStatus,
-        posTargetUrl: targetUrl,
-        payload: posPayload,
+        posSystemType:   'WOOCOMMERCE_REST',
+        status:          syncStatus,
+        posTargetUrl:    targetUrl,
+        payload:         logPayload,
       });
       logEntry = await this.posLogRepo.save(entity);
     } else {
       logEntry = {
-        id: `uuid-pos-${Date.now()}`,
+        id:              `uuid-pos-${Date.now()}`,
         merchantId,
         externalOrderId: order.externalOrderId,
-        posSystemType: 'WOOCOMMERCE_REST',
-        status: syncStatus,
-        posTargetUrl: targetUrl,
-        payload: posPayload,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        posSystemType:   'WOOCOMMERCE_REST',
+        status:          syncStatus,
+        posTargetUrl:    targetUrl,
+        payload:         logPayload,
+        createdAt:       new Date(),
+        updatedAt:       new Date(),
       };
       this.inMemoryStore.unshift(logEntry);
     }
@@ -270,6 +210,66 @@ export class PosRepository implements OnModuleInit {
       });
     }
     return this.inMemoryStore.filter((l) => l.merchantId === merchantId);
+  }
+
+  // ── POS HTTP helpers (mirrors app.controller.ts) ──────────────────────────
+
+  private async postPosOrder(payload: Record<string, unknown>): Promise<any> {
+    const posOrdersUrl =
+      process.env.POS_ORDERS_URL ||
+      'https://merchantrestaurant.alektasolutions.com/wp-json/pinaka-restaurant-pos/v1/orders';
+
+    const configuredAuthorization = process.env.POS_AUTHORIZATION?.trim();
+    const configuredToken = process.env.POS_API_TOKEN?.trim().replace(/^Bearer\s+/i, '');
+    const authorization =
+      configuredAuthorization ||
+      (configuredToken ? `Bearer ${configuredToken}` : undefined);
+
+    if (!authorization) {
+      throw new Error('POS authentication is not configured. Set POS_AUTHORIZATION or POS_API_TOKEN.');
+    }
+
+    const response = await fetch(posOrdersUrl, {
+      method: 'POST',
+      headers: {
+        Authorization:  authorization,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await response.text();
+    let result: any;
+    try {
+      result = text ? JSON.parse(text) : {};
+    } catch {
+      result = { raw: text };
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${JSON.stringify(result)}`);
+    }
+    return result;
+  }
+
+  private extractPosOrderId(response: any): string | number | undefined {
+    return (
+      response?.id ??
+      response?.order_id ??
+      response?.data?.id ??
+      response?.data?.order_id ??
+      response?.data?.order?.id ??
+      response?.data?.order?.order_id
+    );
+  }
+
+  private resolvePosProductId(externalItemId: string | undefined, fallback: number): number {
+    if (!externalItemId) return fallback;
+    const exact = Number(externalItemId);
+    if (Number.isInteger(exact) && exact > 0) return exact;
+    const numericSuffix = externalItemId.match(/(\d+)$/)?.[1];
+    const parsedSuffix = numericSuffix ? Number(numericSuffix) : NaN;
+    return Number.isInteger(parsedSuffix) && parsedSuffix > 0 ? parsedSuffix : fallback;
   }
 
   private async setCache(key: string, value: any): Promise<void> {
