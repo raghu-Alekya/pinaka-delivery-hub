@@ -5,6 +5,7 @@ import {
   Controller,
   Get,
   Headers,
+  Inject,
   NotFoundException,
   Param,
   Post,
@@ -21,9 +22,16 @@ import {
   WebhookRequest,
 } from '@pinaka-delivery-hub/connector-sdk';
 import { connectorRegistry } from './connector-registry';
+import { AggregatorWebhookRepository } from './aggregator-webhook.repository';
+import { AggregatorWebhookEntity } from './aggregator-webhook.entity';
 
 @Controller('api/v1/connectors')
 export class AppController {
+  constructor(
+    @Inject(AggregatorWebhookRepository)
+    private readonly aggregatorWebhooks: AggregatorWebhookRepository,
+  ) {}
+
   private readonly posOrdersUrl =
     process.env.POS_ORDERS_URL ||
     'https://merchantrestaurant.alektasolutions.com/wp-json/pinaka-restaurant-pos/v1/orders';
@@ -65,15 +73,18 @@ export class AppController {
       throw new NotFoundException({
         statusCode: 404,
         message: `Connector '${connectorId}' is not registered`,
-        availableConnectors: connectorRegistry.list().map((item) => item.descriptor.id),
+        availableConnectors: connectorRegistry
+          .list()
+          .map((item) => item.descriptor.id),
         error: 'Not Found',
       });
     }
 
     const correlationHeader = headers['x-correlation-id'];
     const activeCorrelationId =
-      (Array.isArray(correlationHeader) ? correlationHeader[0] : correlationHeader) ||
-      `corr_${crypto.randomUUID()}`;
+      (Array.isArray(correlationHeader)
+        ? correlationHeader[0]
+        : correlationHeader) || `corr_${crypto.randomUUID()}`;
     const envPrefix = normalizedConnectorId.replace(/-/g, '_').toUpperCase();
     const context: ConnectorContext = {
       configuration: {
@@ -107,11 +118,19 @@ export class AppController {
       body,
     };
 
+    let webhookRecord: AggregatorWebhookEntity | undefined;
     try {
+      webhookRecord = await this.aggregatorWebhooks.save(body);
+
       if (connector.verifyWebhook) {
-        const verification = await connector.verifyWebhook(webhookRequest, context);
+        const verification = await connector.verifyWebhook(
+          webhookRequest,
+          context,
+        );
         if (!verification.valid) {
-          throw new BadRequestException(verification.reason || 'Webhook signature is invalid');
+          throw new BadRequestException(
+            verification.reason || 'Webhook signature is invalid',
+          );
         }
       }
 
@@ -138,6 +157,7 @@ export class AppController {
 
       const posOrders = await this.createPosTakeawayOrder(canonicalOrder);
       await GlobalOrderEventBus.publish(envelope);
+      await this.aggregatorWebhooks.updateStatus(webhookRecord.id, 'SUCCESS');
 
       return {
         success: true,
@@ -148,6 +168,23 @@ export class AppController {
         canonicalOrder,
       };
     } catch (error) {
+      if (webhookRecord) {
+        const failureMessage =
+          error instanceof Error ? error.message : String(error);
+        try {
+          await this.aggregatorWebhooks.updateStatus(
+            webhookRecord.id,
+            'FAILED',
+            failureMessage,
+          );
+        } catch (statusError) {
+          console.error(
+            '[PostgreSQL] Failed to update webhook status',
+            statusError,
+          );
+        }
+      }
+
       if (error instanceof ConnectorError) {
         throw new BadRequestException({
           statusCode: error.statusCode || 400,
@@ -185,7 +222,10 @@ export class AppController {
       restaurant_id: restaurantId,
       captain_id: captainId,
       line_items: order.items.map((item) => ({
-        product_id: this.resolvePosProductId(item.externalItemId, defaultProductId),
+        product_id: this.resolvePosProductId(
+          item.externalItemId,
+          defaultProductId,
+        ),
         quantity: item.quantity,
       })),
     });
@@ -193,19 +233,25 @@ export class AppController {
     return { parentOrderId, parent, kot };
   }
 
-  private resolvePosProductId(externalItemId: string, fallback: number): number {
+  private resolvePosProductId(
+    externalItemId: string,
+    fallback: number,
+  ): number {
     const exact = Number(externalItemId);
     if (Number.isInteger(exact) && exact > 0) return exact;
     const numericSuffix = externalItemId.match(/(\d+)$/)?.[1];
     const parsedSuffix = numericSuffix ? Number(numericSuffix) : NaN;
-    return Number.isInteger(parsedSuffix) && parsedSuffix > 0 ? parsedSuffix : fallback;
+    return Number.isInteger(parsedSuffix) && parsedSuffix > 0
+      ? parsedSuffix
+      : fallback;
   }
 
   private async postPosOrder(payload: Record<string, unknown>): Promise<any> {
     const configuredAuthorization = process.env.POS_AUTHORIZATION?.trim();
-    const configuredToken = process.env.POS_API_TOKEN
-      ?.trim()
-      .replace(/^Bearer\s+/i, '');
+    const configuredToken = process.env.POS_API_TOKEN?.trim().replace(
+      /^Bearer\s+/i,
+      '',
+    );
     const authorization =
       configuredAuthorization ||
       (configuredToken ? `Bearer ${configuredToken}` : undefined);
@@ -259,5 +305,4 @@ export class AppController {
       response?.data?.order?.order_id
     );
   }
-
 }

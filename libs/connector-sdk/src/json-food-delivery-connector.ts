@@ -131,11 +131,26 @@ export class JsonFoodDeliveryConnector implements PlatformConnector {
       correlationId: context.correlationId,
     });
     const body = record(request.body);
-    const externalOrderId = text(first(body, this.options.orderIdFields));
-    const merchantId = text(first(body, this.options.merchantIdFields), context.configuration.merchantId);
+    const externalOrderId = text(first(body, [
+      ...this.options.orderIdFields,
+      'order_id', 'orderId', 'id', 'number',
+      'source.orderNumber', 'source.externalReferenceId',
+      'payload.order.orderId', 'payload.order.id',
+    ]));
+    const merchantId = text(first(body, [
+      ...this.options.merchantIdFields,
+      'store_id', 'storeId', 'merchant_id', 'merchantId',
+      'destination.storeId', 'destination.store_id',
+      'destination.restaurantId', 'destination.restaurant_id',
+      'destination.externalRestaurantId',
+      'payload.destination.storeId', 'payload.destination.store_id',
+    ]), context.configuration.merchantId);
     if (!externalOrderId) throw new ConnectorError('externalOrderId is required', 'INVALID_CANONICAL_ORDER', false, 400);
     if (!merchantId) throw new ConnectorError('merchantId is required', 'INVALID_CANONICAL_ORDER', false, 400);
-    const rawItems = first(body, this.options.itemsFields);
+    const rawItems = first(body, [
+      ...this.options.itemsFields,
+      'items', 'order.items', 'payload.order.items', 'line_items',
+    ]);
     if (!Array.isArray(rawItems) || rawItems.length === 0) {
       throw new ConnectorError('items must contain at least one item', 'INVALID_CANONICAL_ORDER', false, 400);
     }
@@ -152,7 +167,11 @@ export class JsonFoodDeliveryConnector implements PlatformConnector {
         unitPrice: requiredNumber(first(item, this.options.itemPriceFields), `items[${index}].unitPrice`, { min: 0 }),
       };
     });
-    const total = requiredNumber(first(body, this.options.totalFields), 'totalAmount', { min: 0 });
+    const total = requiredNumber(first(body, [
+      ...this.options.totalFields,
+      'total', 'total_amount', 'pricing.total', 'order.total',
+      'payload.order.total',
+    ]), 'totalAmount', { min: 0 });
     const now = context.now().toISOString();
     const order: CanonicalOrder = {
       id: `ord_${crypto.randomUUID()}`,
@@ -166,12 +185,18 @@ export class JsonFoodDeliveryConnector implements PlatformConnector {
           'customer.phone', 'customer.phone_number', 'customer_phone',
           'payload.customer.phoneNumber', 'billing.phone',
         ]), 'not-provided'),
-        email: text(first(body, ['customer.email', 'payload.customer.email', 'billing.email'])) || undefined,
+        email: text(first(body, [
+          'customer.email', 'payload.customer.email',
+          'payload.customer.customerEmail', 'billing.email',
+        ])) || undefined,
       },
       items,
       subtotal: number(first(body, ['subtotal', 'pricing.subtotal', 'payload.order.subtotal'])) || total,
       tax: number(first(body, ['tax', 'tax_amount', 'total_tax', 'pricing.tax', 'payload.order.tax'])),
-      deliveryFee: number(first(body, ['delivery_fee', 'deliveryFee', 'pricing.delivery_fee', 'payload.order.deliveryCharge'])),
+      deliveryFee: number(first(body, [
+        'delivery_fee', 'deliveryFee', 'pricing.delivery_fee',
+        'payload.order.deliveryFee', 'payload.order.deliveryCharge',
+      ])),
       totalAmount: total,
       deliveryAddress: {
         street: text(first(body, [

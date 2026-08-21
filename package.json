@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "start:all": "powershell -ExecutionPolicy Bypass -File ./scripts/launch-pdh.ps1",
+    "start:all": "bash ./scripts/launch-pdh.sh",
+    "start:all:windows": "powershell -ExecutionPolicy Bypass -File ./scripts/launch-pdh.ps1",
     "start:gateway": "nx serve gateway",
     "start:orders": "nx serve order-service",
     "start:connectors": "nx serve connector-service",
