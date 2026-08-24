@@ -29,7 +29,7 @@ function Start-Microservice {
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "Write-Host 'Booting $Name (Port $Port)...' -ForegroundColor Cyan; $Command"
 }
 
-# 3. Launching 7 Microservices
+# 3. Launching application services
 Start-Microservice -Name "Gateway UI" -Command "npx nx serve gateway" -Port 3000
 Start-Microservice -Name "Connector Service" -Command "npx nx serve connector-service" -Port 3001
 Start-Microservice -Name "Order Service" -Command "npx nx serve order-service" -Port 3002
@@ -38,6 +38,9 @@ Start-Microservice -Name "Menu Service" -Command "npx nx serve menu-service" -Po
 Start-Microservice -Name "Inventory Service" -Command "npx nx serve inventory-service" -Port 3005
 Start-Microservice -Name "Analytics Service" -Command "npx nx serve analytics-service" -Port 3006
 Start-Microservice -Name "POS Integration Service" -Command "npx nx serve pos-integration-service" -Port 3007
+Start-Microservice -Name "Notification Service" -Command "npx nx serve notification-service" -Port 3008
+Start-Microservice -Name "Admin API" -Command "npx nx serve admin-api" -Port 3009
+Start-Microservice -Name "Auth Service" -Command "npx nx serve auth-service" -Port 3010
 
 # 4. Display Final Status Banner
 Start-Sleep -Seconds 3
@@ -54,6 +57,9 @@ Write-Host "MENU AND 86-ITEM SERVICE:    http://localhost:3004" -ForegroundColor
 Write-Host "INVENTORY AND STOCK SERVICE: http://localhost:3005" -ForegroundColor White
 Write-Host "REVENUE ANALYTICS SERVICE:   http://localhost:3006" -ForegroundColor White
 Write-Host "POS INTEGRATION SERVICE:     http://localhost:3007" -ForegroundColor White
+Write-Host "NOTIFICATION SERVICE:        http://localhost:3008" -ForegroundColor White
+Write-Host "ADMIN API:                   http://localhost:3009" -ForegroundColor White
+Write-Host "AUTH SERVICE:                http://localhost:3010" -ForegroundColor White
 Write-Host ""
 Write-Host "INFRASTRUCTURE MANAGEMENT DASHBOARDS:" -ForegroundColor Yellow
 Write-Host "pgAdmin 4 (PostgreSQL Web UI): http://localhost:5050 (admin@pdh.com / pdh_password)" -ForegroundColor Gray
