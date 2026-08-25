@@ -3,6 +3,7 @@ import { DataSource, Repository } from 'typeorm';
 import Redis from 'ioredis';
 import { CanonicalOrder, OrderStatus } from '@pinaka-delivery-hub/canonical-model';
 import { EventEnvelope } from '@pinaka-delivery-hub/event-contracts';
+import { GlobalOrderEventBus } from '@pinaka-delivery-hub/messaging';
 import { OrderEntity } from './entities/order.entity';
 import { OrderItemEntity } from './entities/order-item.entity';
 
@@ -57,6 +58,16 @@ export class OrderRepository implements OnModuleInit {
       console.log(`⚠️ [Redis Cache] Redis offline (${err.message}). Proceeding without cache.`);
       this.isRedisConnected = false;
     }
+
+    // Register consumers only after this Nest-managed repository is initialized.
+    GlobalOrderEventBus.subscribe((envelope: EventEnvelope<CanonicalOrder>) => {
+      void this.saveOrderFromEnvelope(envelope);
+    });
+    await GlobalOrderEventBus.subscribeToRabbitMQ(
+      async (envelope: EventEnvelope<CanonicalOrder>) => {
+        await this.saveOrderFromEnvelope(envelope);
+      },
+    );
   }
 
   async saveOrderFromEnvelope(envelope: EventEnvelope<CanonicalOrder>): Promise<CanonicalOrder> {

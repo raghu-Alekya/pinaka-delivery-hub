@@ -6,7 +6,14 @@ export class DoorDashConnector extends JsonFoodDeliveryConnector {
     super({
       descriptor: { id: 'doordash', displayName: 'DoorDash', platform: PlatformSource.DOORDASH, version: '1.0.0' },
       orderIdFields: ['order_id', 'orderId', 'id', 'number', 'source.orderNumber', 'source.externalReferenceId'],
-      merchantIdFields: ['store_id', 'storeId', 'merchant_id', 'destination.externalRestaurantId', 'destination.restaurantId'],
+      merchantIdFields: [
+        'store_id',
+        'storeId',
+        'merchant_id',
+        'destination.storeId',
+        'destination.externalRestaurantId',
+        'destination.restaurantId',
+      ],
       totalFields: ['total', 'total_amount', 'pricing.total', 'payload.order.total'],
       itemsFields: ['items', 'order.items', 'payload.order.items', 'line_items'],
       itemNameFields: ['name', 'title'],
