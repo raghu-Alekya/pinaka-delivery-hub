@@ -1,25 +1,11 @@
 import { Controller, Get, Post, Patch, Param, Body, NotFoundException, ParseEnumPipe } from '@nestjs/common';
 import { OrderStatus } from '@pinaka-delivery-hub/canonical-model';
-import { EventEnvelope } from '@pinaka-delivery-hub/event-contracts';
-import { GlobalOrderEventBus } from '@pinaka-delivery-hub/messaging';
 import { OrderRepository } from './order.repository';
-
-// Instantiate OrderRepository instance cleanly for order domain
-const orderRepository = new OrderRepository();
-orderRepository.onModuleInit();
-
-// Local Event Bus Subscription
-GlobalOrderEventBus.subscribe((envelope: EventEnvelope<any>) => {
-  orderRepository.saveOrderFromEnvelope(envelope);
-});
-
-// RabbitMQ AMQP Queue Consumer Subscription
-GlobalOrderEventBus.subscribeToRabbitMQ(async (envelope: EventEnvelope<any>) => {
-  await orderRepository.saveOrderFromEnvelope(envelope);
-});
 
 @Controller('api/v1/orders')
 export class AppController {
+  constructor(private readonly orderRepository: OrderRepository) {}
+
   @Get('health')
   health() {
     return {
@@ -38,13 +24,13 @@ export class AppController {
 
   @Post('events')
   async handleOrderEvent(@Body() envelope: any) {
-    const saved = await orderRepository.saveOrderFromEnvelope(envelope);
+    const saved = await this.orderRepository.saveOrderFromEnvelope(envelope);
     return { success: true, order: saved };
   }
 
   @Get()
   async getAllOrders() {
-    const orders = await orderRepository.findAllOrders();
+    const orders = await this.orderRepository.findAllOrders();
     return {
       success: true,
       count: orders.length,
@@ -54,7 +40,7 @@ export class AppController {
 
   @Get(':id')
   async getOrderById(@Param('id') id: string) {
-    const order = await orderRepository.findOrderById(id);
+    const order = await this.orderRepository.findOrderById(id);
     if (!order) {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
@@ -69,7 +55,7 @@ export class AppController {
     @Param('id') id: string,
     @Body('status', new ParseEnumPipe(OrderStatus)) status: OrderStatus
   ) {
-    const updated = await orderRepository.updateOrderStatus(id, status);
+    const updated = await this.orderRepository.updateOrderStatus(id, status);
     if (!updated) {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }

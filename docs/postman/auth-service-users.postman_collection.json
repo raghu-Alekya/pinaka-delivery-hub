@@ -1,0 +1,462 @@
+{
+  "info": {
+    "_postman_id": "cbac9a7c-20f6-45d6-865f-740dc7b49220",
+    "name": "Pinaka Auth Service - Users API",
+    "description": "Choose one account creation path: self sign-up creates an active owner immediately, while POS onboarding creates a pending owner who accepts an invitation. Do not run both with the same email. Then use User Management.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3009",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "actionToken",
+      "value": "paste-token-from-email-or-development-mail-preview",
+      "type": "string"
+    },
+    {
+      "key": "posApiKey",
+      "value": "replace-with-a-pos-api-key",
+      "type": "string"
+    },
+    {
+      "key": "accountName",
+      "value": "My Restaurant",
+      "type": "string"
+    },
+    {
+      "key": "ownerEmail",
+      "value": "replace-with-your-real-gmail@gmail.com",
+      "type": "string"
+    },
+    {
+      "key": "ownerPassword",
+      "value": "ChangeMe@123",
+      "type": "string"
+    },
+    {
+      "key": "ownerFirstName",
+      "value": "Restaurant",
+      "type": "string"
+    },
+    {
+      "key": "ownerLastName",
+      "value": "Owner",
+      "type": "string"
+    },
+    {
+      "key": "ownerPhone",
+      "value": "+919090909090",
+      "type": "string"
+    },
+    {
+      "key": "managedUserEmail",
+      "value": "replace-with-team-member-email@gmail.com",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Mock Mailbox",
+      "description": "Use after Create Account, Create User, or Request Password Reset. No real email is sent when MAIL_MODE=mock.",
+      "item": [
+        {
+          "name": "Get Emails and Save Latest Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Mock mailbox loaded', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const response = pm.response.json();",
+                  "  if (response.messages.length) {",
+                  "    const url = new URL(response.messages[0].actionUrl);",
+                  "    pm.collectionVariables.set('actionToken', url.searchParams.get('token'));",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/dev/mailbox",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "dev", "mailbox"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Clear Emails",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/dev/mailbox",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "dev", "mailbox"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2 - Authentication",
+      "item": [
+        {
+          "name": "Alternative - Self Sign Up (Creates Account Owner)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Account created', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const response = pm.response.json();",
+                  "  pm.expect(response.accessToken).to.be.a('string');",
+                  "  pm.collectionVariables.set('accessToken', response.accessToken);",
+                  "  pm.collectionVariables.set('userId', response.user.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{ownerPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "signup"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login successful', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const response = pm.response.json();",
+                  "  pm.expect(response.accessToken).to.be.a('string');",
+                  "  pm.collectionVariables.set('accessToken', response.accessToken);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\",\n  \"password\": \"{{ownerPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Continue with Google",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credential\": \"paste-google-id-credential\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/google",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "google"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Request Password Reset Email",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ownerEmail}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/password/reset-request",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "password", "reset-request"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Password Reset",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{actionToken}}\",\n  \"password\": \"NewPassword@123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/password/reset",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "password", "reset"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Accept Owner or User Invitation",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invitation accepted', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const response = pm.response.json();",
+                  "  pm.collectionVariables.set('accessToken', response.accessToken);",
+                  "  pm.collectionVariables.set('userId', response.user.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{actionToken}}\",\n  \"password\": \"{{ownerPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/invitations/accept",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "invitations", "accept"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "1 - POS Account Onboarding",
+      "item": [
+        {
+          "name": "Create Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "api-key", "value": "{{posApiKey}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"account_name\": \"{{accountName}}\",\n  \"account_manager_email\": \"{{ownerEmail}}\",\n  \"account_manager_firstname\": \"{{ownerFirstName}}\",\n  \"account_manager_lastname\": \"{{ownerLastName}}\",\n  \"account_manager_phone\": \"{{ownerPhone}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/pos/account",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "pos", "account"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3 - User Management",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          { "key": "token", "value": "{{accessToken}}", "type": "string" }
+        ]
+      },
+      "item": [
+        {
+          "name": "Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User created', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  const response = pm.response.json();",
+                  "  pm.expect(response.success).to.eql(true);",
+                  "  pm.expect(response.user.id).to.be.a('string');",
+                  "  pm.collectionVariables.set('userId', response.user.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Team\",\n  \"lastName\": \"Member\",\n  \"email\": \"{{managedUserEmail}}\",\n  \"phoneNumber\": \"+919090909090\",\n  \"role\": \"MANAGER\",\n  \"notificationEnabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List All Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Edit User",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Kumar Updated\",\n  \"role\": \"USER\",\n  \"notificationEnabled\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User deleted', function () {",
+                  "  pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
