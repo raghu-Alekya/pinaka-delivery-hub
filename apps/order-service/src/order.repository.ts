@@ -59,7 +59,6 @@ export class OrderRepository implements OnModuleInit {
       this.isRedisConnected = false;
     }
 
-    // Register consumers only after this Nest-managed repository is initialized.
     GlobalOrderEventBus.subscribe((envelope: EventEnvelope<CanonicalOrder>) => {
       void this.saveOrderFromEnvelope(envelope);
     });
