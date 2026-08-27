@@ -101,11 +101,14 @@ class OrderEventBus {
     console.log(`[Event Bus Published] EventID: ${envelope.eventId} | Topic: ${envelope.eventType}`);
     await this.initRabbitMQ();
 
-    this.publishToRabbitMQ(envelope);
+    const publishedToRabbitMQ = this.publishToRabbitMQ(envelope);
     this.listeners.forEach((listener) => listener(envelope));
 
-    // Dispatch to HTTP targets so all active microservices (order, inventory, analytics) receive the event
-    await this.publishThroughHttpFallback(envelope);
+    // RabbitMQ is the primary delivery path for order-service. Only call its HTTP
+    // endpoint when publishing to RabbitMQ was unavailable; otherwise the same
+    // event would be ingested twice. The remaining services still receive their
+    // HTTP notifications because a queue delivers each message to one consumer.
+    await this.publishThroughHttpFallback(envelope, publishedToRabbitMQ);
   }
 
   private publishToRabbitMQ(envelope: EventEnvelope<CanonicalOrder>): boolean {
@@ -121,13 +124,18 @@ class OrderEventBus {
     }
   }
 
-  private async publishThroughHttpFallback(envelope: EventEnvelope<CanonicalOrder>): Promise<void> {
+  private async publishThroughHttpFallback(
+    envelope: EventEnvelope<CanonicalOrder>,
+    publishedToRabbitMQ: boolean,
+  ): Promise<void> {
     const targets = [
-      'http://localhost:3002/api/v1/orders/events',
       'http://localhost:3005/api/v1/inventory/events',
       'http://localhost:3006/api/v1/analytics/events',
       'http://localhost:3007/api/v1/pos/events',
     ];
+    if (!publishedToRabbitMQ) {
+      targets.unshift('http://localhost:3002/api/v1/orders/events');
+    }
     for (const url of targets) {
       try {
         await fetch(url, {

@@ -1,10 +1,13 @@
-import { Controller, Get, Post, Patch, Param, Body, NotFoundException, ParseEnumPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Inject, NotFoundException, ParseEnumPipe } from '@nestjs/common';
 import { OrderStatus } from '@pinaka-delivery-hub/canonical-model';
 import { OrderRepository } from './order.repository';
 
 @Controller('api/v1/orders')
 export class AppController {
-  constructor(private readonly orderRepository: OrderRepository) {}
+  constructor(
+    @Inject(OrderRepository)
+    private readonly orderRepository: OrderRepository,
+  ) {}
 
   @Get('health')
   health() {
