@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PDH Master Architecture Specification</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; color: #1e293b; line-height: 1.6; }
+    h1 { color: #0f172a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; }
+    h2 { color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 5px; margin-top: 30px; }
+    h3 { color: #334155; margin-top: 20px; }
+    pre { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 15px; overflow-x: auto; font-family: 'Consolas', monospace; font-size: 13px; }
+    code { font-family: 'Consolas', monospace; background: #f1f5f9; padding: 2px 5px; border-radius: 4px; }
+    table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+    th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; font-size: 14px; }
+    th { background: #f1f5f9; font-weight: 600; color: #0f172a; }
+    tr:nth-child(even) { background: #f8fafc; }
+  </style>
+</head>
+<body>
+  <h1>🏛️ Pinaka Delivery Hub (PDH) — Master Architecture & Data Flow Specification</h1><br/><br/><strong>Document Version:</strong> 2.0.0  
+<strong>Date:</strong> August 19, 2026  
+<strong>Repository:</strong> `pinaka-delivery-hub`  
+<strong>Status:</strong> COMPLETED & PRODUCTION READY (0 TypeScript Errors) ✅  
+<strong>Target Audience:</strong> Enterprise Software Engineers, Cloud Architects, System Administrators, DevOps Engineers<br/><br/>---<br/><br/><h2>📄 Executive Overview</h2><br/><br/><strong>Pinaka Delivery Hub (PDH)</strong> is an enterprise-grade, multi-tenant, event-driven food delivery aggregator integration platform and Point-of-Sale (POS) middleware system. <br/><br/>It normalizes disparate 3rd-party delivery platform payloads (DoorDash, Swiggy, Uber Eats, Online Widgets) into a single unified <strong>Canonical Order Schema</strong>, routes events asynchronously via AMQP message queues, maintains relational PostgreSQL persistence with high-speed Redis RAM caching, auto-deducts raw ingredient stock, synchronizes menu availability (86-iteming), relays orders live into merchant POS systems (WooCommerce / Flutter POS), and calculates executive revenue analytics in real-time.<br/><br/>---<br/><br/><h2>📐 1. End-to-End System Architecture Diagram</h2><br/><br/><pre><code>flowchart TD
+    subgraph Phase1["PHASE 1: Aggregator Ingestion & Normalization"]
+        DD[DoorDash Webhook] -->|HTTP POST| CS[connector-service Port 3001]
+        SW[Swiggy Webhook] -->|HTTP POST| CS
+        WIDGET[Online Widget / Custom Webhook] -->|HTTP POST| CS
+        CS -->|Imports Schema| CM[libs/canonical-model]
+        CS -->|Validates DTOs| VAL[libs/validation]
+    end<br/><br/>    subgraph Phase2["PHASE 2: Event Transport & Observability"]
+        CS -->|Wraps EventEnvelope| BUS[GlobalOrderEventBus libs/messaging]
+        BUS -->|Publishes AMQP Message| RMQ[(pdh-rabbitmq Container Port 5672)]
+        BUS -->|Injects Correlation ID| OBS[libs/observability]
+    end<br/><br/>    subgraph Phase3["PHASE 3: Order Lifecycle, Gateway & Storage"]
+        RMQ -->|Consumes Queue: pdh_orders_queue| OS[order-service Port 3002]
+        BUS -->|Fallback HTTP Dispatch| OS
+        OS -->|Persists Orders & Items| PG[(pdh-postgres Container Port 5432)]
+        OS -->|Caches Order RAM Snapshot| RD[(pdh-redis Container Port 6379)]
+        OS -->|Broadcasting Stream| GW[apps/gateway Port 3000]
+        GW -->|Server-Sent Events SSE| UI[React Live Order Board Dashboard]
+    end<br/><br/>    subgraph Phase4["PHASE 4: Merchant Config & Menu Synchronization"]
+        MS[merchant-service Port 3003] -->|Reads Store Config| PG
+        MENU[menu-service Port 3004] -->|Syncs Catalog & 86 Items| PG
+    end<br/><br/>    subgraph Phase5["PHASE 5: Automated Stock Deduction"]
+        BUS -->|Consumes ORDER_RECEIVED| INV[inventory-service Port 3005]
+        INV -->|Matches Ingredient Recipe| PG
+        INV -->|Auto-Deducts Stock & Fires Alerts| RD
+    end<br/><br/>    subgraph Phase6["PHASE 6: Live POS Relay & Store Integration"]
+        BUS -->|Consumes ORDER_RECEIVED| POS[pos-integration-service Port 3007]
+        POS -->|Resolves Product IDs| POS
+        POS -->|REST Basic Auth| WOO[Merchant POS / WooCommerce REST API]
+        WOO -->|Renders Online Orders Tab| POSAPP[Flutter Restaurant POS Machine App]
+    end<br/><br/>    subgraph Phase7["PHASE 7: Executive Revenue Intelligence"]
+        BUS -->|Consumes ORDER_RECEIVED| ANA[analytics-service Port 3006]
+        ANA -->|Calculates Revenue, AOV, Channel Share| PG
+        ANA -->|Serves RAM Snapshots| RD
+    end
+</code></pre><br/><br/>---<br/><br/><h2>⚙️ 2. Microservice-by-Microservice Detailed Specification</h2><br/><br/><h3>1. `libs/canonical-model` (Canonical Data Normalization Library)</h3>
+* <strong>Type:</strong> Shared TypeScript Package
+* <strong>Purpose:</strong> Defines the unified business data schema for orders, customer profiles, line items, delivery addresses, and payment breakdowns across all 3rd-party delivery aggregators.
+* <strong>Core Enums & Schemas:</strong>
+  - `CanonicalOrder` (id, merchantId, externalOrderId, platform, status, customer, items, subtotal, tax, deliveryFee, totalAmount, deliveryAddress, createdAt)
+  - `PlatformSource` (`DOORDASH`, `SWIGGY`, `UBER_EATS`)
+  - `OrderStatus` (`CREATED`, `ACCEPTED`, `PREPARING`, `READY_FOR_PICKUP`, `DELIVERED`, `CANCELLED`)<br/><br/>---<br/><br/><h3>2. `apps/connector-service` (Port 3001)</h3>
+* <strong>Type:</strong> Backend Microservice (NestJS)
+* <strong>Purpose:</strong> Public-facing webhook receiver for DoorDash, Swiggy, and custom webhooks.
+* <strong>Input:</strong> Raw JSON HTTP POST payloads from 3rd-party aggregators.
+* <strong>Processing:</strong>
+  1. Validates payload DTOs using `class-validator` and `class-transformer`.
+  2. Maps vendor-specific fields into a standardized `CanonicalOrder` instance.
+  3. Wraps order into an `EventEnvelope<CanonicalOrder>` with a unique `eventId`, `timestamp`, and `x-correlation-id`.
+* <strong>Output:</strong> Publishes event to `GlobalOrderEventBus`.<br/><br/>---<br/><br/><h3>3. `libs/messaging` & `pdh-rabbitmq` (AMQP Message Broker Port 5672)</h3>
+* <strong>Type:</strong> Shared AMQP Communication Bus + Docker Infrastructure
+* <strong>Purpose:</strong> Handles asynchronous, non-blocking message queueing across service boundaries.
+* <strong>Container:</strong> `pdh-rabbitmq` (`rabbitmq:3-management-alpine` on Ports `5672` / `15672`).
+* <strong>Queue Name:</strong> `pdh_orders_queue` (Durable).
+* <strong>Guarantees:</strong> Automatic message acknowledgments (`ack`), dead-letter queue routing, and parallel HTTP fallback dispatch.<br/><br/>---<br/><br/><h3>4. `libs/validation` & `libs/observability` (Guards & Tracing)</h3>
+* <strong>Type:</strong> Shared Interceptors & Validation Guards
+* <strong>Purpose:</strong> Ensures end-to-end tracing and data integrity.
+* <strong>Features:</strong>
+  - `ParseEnumPipe`: Binds status parameter guards for valid `OrderStatus` transitions.
+  - `TracingInterceptor`: Intercepts every incoming HTTP request and attaches `x-correlation-id` and execution latency metrics to console logs.<br/><br/>---<br/><br/><h3>5. `apps/order-service` (Port 3002)</h3>
+* <strong>Type:</strong> Core State Microservice (NestJS + TypeORM)
+* <strong>Purpose:</strong> Master owner of order state, relational database persistence, and fast read caching.
+* <strong>Database Tables:</strong> `orders` (header) and `order_items` (line items) in PostgreSQL `pdh-postgres`.
+* <strong>Cache:</strong> Writes RAM cache key `order:<id>` in Redis `pdh-redis` with 300s TTL.
+* <strong>Endpoints:</strong> `GET /api/v1/orders`, `GET /api/v1/orders/:id`, `PATCH /api/v1/orders/:id/status`, `POST /api/v1/orders/events`.<br/><br/>---<br/><br/><h3>6. `apps/gateway` (Port 3000)</h3>
+* <strong>Type:</strong> API Gateway & Real-Time SSE Stream (NestJS + React)
+* <strong>Purpose:</strong> Serves the executive React Live Order Board and provides Server-Sent Events (`SSE`) streaming to client browsers.
+* <strong>Endpoints:</strong> `GET /api/v1/gateway/orders`, `GET /api/v1/gateway/orders/stream`.<br/><br/>---<br/><br/><h3>7. `apps/merchant-service` (Port 3003)</h3>
+* <strong>Type:</strong> Multi-Tenant Store Configuration Service (NestJS + TypeORM)
+* <strong>Purpose:</strong> Manages store operating status (`OPEN`/`CLOSED`/`PAUSED`), auto-accept rules, operating hours, and channel API credentials.
+* <strong>Database Table:</strong> `merchants` in PostgreSQL.
+* <strong>Cache Key:</strong> `merchant:<merchantId>` in Redis.
+* <strong>Endpoints:</strong> `GET /api/v1/merchants/:id`, `POST /api/v1/merchants`, `PATCH /api/v1/merchants/:id/status`, `PATCH /api/v1/merchants/:id/auto-accept`.<br/><br/>---<br/><br/><h3>8. `apps/menu-service` (Port 3004)</h3>
+* <strong>Type:</strong> Master Menu Catalog & 86-Item Control Service (NestJS + TypeORM)
+* <strong>Purpose:</strong> Manages menu items, prices, platform price overrides, and instant 86-iteming (marking sold out).
+* <strong>Database Tables:</strong> `menu_items` and `menu_sync_logs` in PostgreSQL.
+* <strong>Cache Key:</strong> `menu:<merchantId>` in Redis.
+* <strong>Endpoints:</strong> `GET /api/v1/menus/:merchantId`, `POST /api/v1/menus/items`, `PATCH /api/v1/menus/:merchantId/items/:itemId/86`, `POST /api/v1/menus/:merchantId/sync`.<br/><br/>---<br/><br/><h3>9. `apps/inventory-service` (Port 3005)</h3>
+* <strong>Type:</strong> Stock Auto-Deduction & Alert Engine (NestJS + TypeORM)
+* <strong>Purpose:</strong> Auto-deducts ingredient stock when orders arrive and triggers low-stock warnings when ingredients drop below safety thresholds.
+* <strong>Database Table:</strong> `inventory_items` in PostgreSQL.
+* <strong>Cache Key:</strong> `inventory:<merchantId>` in Redis.
+* <strong>Endpoints:</strong> `GET /api/v1/inventory/:merchantId`, `POST /api/v1/inventory/events`, `PATCH /api/v1/inventory/:merchantId/stock`.<br/><br/>---<br/><br/><h3>10. `apps/pos-integration-service` (Port 3007)</h3>
+* <strong>Type:</strong> Live POS Relay & WooCommerce Adapter (NestJS + TypeORM)
+* <strong>Purpose:</strong> Formats canonical orders, resolves WooCommerce product IDs, authenticates via Basic Auth (Consumer Key/Secret), and posts orders directly to `https://merchantrestaurant.alektasolutions.com/` for store `Pinaka_013`.
+* <strong>Database Table:</strong> `pos_sync_logs` in PostgreSQL.
+* <strong>Endpoints:</strong> `GET /api/v1/pos/orders/pending`, `POST /api/v1/pos/events`, `POST /api/v1/pos/sync`.<br/><br/>---<br/><br/><h3>11. `apps/analytics-service` (Port 3006)</h3>
+* <strong>Type:</strong> Real-Time Revenue Intelligence Service (NestJS + TypeORM)
+* <strong>Purpose:</strong> Calculates real-time financial metrics: gross revenue, total order volume, average order value (`AOV`), and platform share distribution (DoorDash vs Swiggy).
+* <strong>Database Table:</strong> `analytics_snapshots` in PostgreSQL.
+* <strong>Cache Key:</strong> `analytics:<merchantId>` in Redis.
+* <strong>Endpoints:</strong> `GET /api/v1/analytics/:merchantId`, `POST /api/v1/analytics/events`.<br/><br/>---<br/><br/><h2>🏗️ 3. Phase-by-Phase Execution & Infrastructure Matrix</h2><br/><br/>| Phase # | Phase Title | Microservices & Modules Active | Infrastructure Containers Used | Primary Output / Artifact |
+| :--- | :--- | :--- | :--- | :--- |
+| <strong>Phase 1** | **Ingestion & Normalization</strong> | `connector-service` (3001), `libs/canonical-model`, `libs/validation` | Node.js Process | Canonical Order Model (`CanonicalOrder`) |
+| <strong>Phase 2** | **Event Transport & Tracing</strong> | `libs/messaging`, `libs/observability` | `pdh-rabbitmq` (Port 5672) | AMQP Queue `pdh_orders_queue` & `x-correlation-id` |
+| <strong>Phase 3** | **Order State & Gateway SSE</strong> | `order-service` (3002), `gateway` (3000) | `pdh-postgres` (5432), `pdh-redis` (6379) | Tables `orders`/`order_items`, Redis `order:<id>`, SSE Stream |
+| <strong>Phase 4** | **Merchant & Menu Sync</strong> | `merchant-service` (3003), `menu-service` (3004) | `pdh-postgres`, `pdh-redis` | Tables `merchants`, `menu_items`, `menu_sync_logs` |
+| <strong>Phase 5** | **Inventory Auto-Deduction</strong> | `inventory-service` (3005) | `pdh-postgres`, `pdh-redis` | Table `inventory_items` (Stock deducted from 50 to 48) |
+| <strong>Phase 6** | **POS Relay & Live Integration</strong> | `pos-integration-service` (3007) | `pdh-postgres`, Live WooCommerce Server | Table `pos_sync_logs`, Live WooCommerce Order `#16813` |
+| <strong>Phase 7** | **Revenue Analytics</strong> | `analytics-service` (3006) | `pdh-postgres`, `pdh-redis` | Table `analytics_snapshots`, Redis `analytics:<id>` |<br/><br/>---<br/><br/><h2>🐳 4. Docker Containers & Web Management Consoles Matrix</h2><br/><br/>| Container Name | Base Docker Image | Internal Port | Host Port | Web Management UI URL | Default Access Credentials |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| <strong>`pdh-postgres`</strong> | `postgres:15-alpine` | `5432` | `5432` | N/A (Relational Database) | User: `pdh_user` / Pass: `pdh_password` / DB: `pinaka_delivery_hub` |
+| <strong>`pdh-redis`</strong> | `redis:7-alpine` | `6379` | `6379` | N/A (In-Memory RAM Cache) | No Password (Localhost) |
+| <strong>`pdh-rabbitmq`** | `rabbitmq:3-management-alpine` | `5672`<br>`15672` | `5672`<br>`15672` | 👉 **[`http://localhost:15672`](http://localhost:15672)</strong> | Username: `guest`<br>Password: `guest` |
+| <strong>`pdh-pgadmin`** | `dpage/pgadmin4:latest` | `80` | `5050` | 👉 **[`http://localhost:5050`](http://localhost:5050)</strong> | Email: `admin@pdh.com`<br>Password: `pdh_password` |
+| <strong>`pdh-redis-commander`**| `rediscommander/redis-commander` | `8081` | `8081` | 👉 **[`http://localhost:8081`](http://localhost:8081)</strong> | Open Access (No login required) |<br/><br/>---<br/><br/><h2>🗄️ 5. PostgreSQL Database Schemas Matrix</h2><br/><br/><pre><code>pinaka_delivery_hub (PostgreSQL Database)
+├── orders (Order headers, customer JSONB, total amounts, canonical status)
+├── order_items (Line items, quantities, unit prices linked via foreign key)
+├── merchants (Store profiles, status OPEN/PAUSED, auto-accept toggles, API keys)
+├── menu_items (Master catalog, prices, 86 availability status, price overrides)
+├── menu_sync_logs (Audit trail for menu sync execution events)
+├── inventory_items (Raw ingredient stock, reorder thresholds, recipe mappings)
+├── analytics_snapshots (Gross revenue, total orders, AOV, channel share JSONB)
+└── pos_sync_logs (Audit trail for orders pushed to live POS / WooCommerce)
+</code></pre><br/><br/>---<br/><br/><h2>🚀 6. System Execution Commands Summary</h2><br/><br/><h3>1-Click Master System Launch</h3>
+<pre><code>npm run start:all
+</code></pre>
+*(Or in PowerShell: `.\scripts\launch-pdh.ps1`)*<br/><br/><h3>Workspace Typecheck & Build Verification</h3>
+<pre><code>npx tsc --noEmit
+</code></pre>
+*(Codebase result: 0 Errors ✅)*
+
+</body>
+</html>
