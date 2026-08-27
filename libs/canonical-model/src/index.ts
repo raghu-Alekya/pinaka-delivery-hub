@@ -8,6 +8,17 @@ export enum OrderStatus {
   CANCELLED = 'CANCELLED',
 }
 
+export enum RetailOrderStatus {
+  CREATED = 'CREATED',
+  ACCEPTED = 'ACCEPTED',
+  PICKING_IN_PROGRESS = 'PICKING_IN_PROGRESS',
+  AWAITING_SUBSTITUTION_APPROVAL = 'AWAITING_SUBSTITUTION_APPROVAL',
+  PACKED_STAGED = 'PACKED_STAGED',
+  OUT_FOR_DELIVERY = 'OUT_FOR_DELIVERY',
+  DELIVERED = 'DELIVERED',
+  CANCELLED = 'CANCELLED',
+}
+
 export enum PlatformSource {
   DOORDASH = 'DOORDASH',
   UBER_EATS = 'UBER_EATS',
@@ -16,6 +27,21 @@ export enum PlatformSource {
   ZOMATO = 'ZOMATO',
   WOOCOMMERCE = 'WOOCOMMERCE',
   ORDEROUT = 'ORDEROUT',
+  // Retail & Grocery Extensions (PCH)
+  INSTACART = 'INSTACART',
+  DOORDASH_GROCERY = 'DOORDASH_GROCERY',
+  UBER_CONVENIENCE = 'UBER_CONVENIENCE',
+  BLINKIT = 'BLINKIT',
+  ZEPTO = 'ZEPTO',
+  SHOPIFY = 'SHOPIFY',
+  PINAKA_POS = 'PINAKA_POS',
+}
+
+export enum TemperatureZone {
+  AMBIENT = 'AMBIENT',
+  CHILLED = 'CHILLED',
+  FROZEN = 'FROZEN',
+  HAZMAT_ALCOHOL = 'HAZMAT_ALCOHOL',
 }
 
 export interface OrderCustomer {
@@ -32,6 +58,32 @@ export interface OrderItem {
   quantity: number;
   unitPrice: number;
   options?: Array<{ name: string; value: string; price: number }>;
+}
+
+export interface RetailOrderItem {
+  id: string;
+  sku: string;
+  upcBarCode: string;
+  name: string;
+  quantityRequested: number;
+  quantityPicked: number;
+  isWeightBased: boolean;
+  unitOfMeasure?: 'KG' | 'GRAM' | 'LB' | 'OZ' | 'UNIT';
+  estimatedWeight?: number;
+  actualWeight?: number;
+  unitPrice: number;
+  totalPrice: number;
+  temperatureZone: TemperatureZone;
+  aisleLocation?: { aisle: string; shelf: string; bin: string };
+  substitutionAllowed: boolean;
+  substitutedWithItem?: {
+    sku: string;
+    name: string;
+    upcBarCode: string;
+    quantity: number;
+    unitPrice: number;
+  };
+  itemStatus: 'PENDING' | 'PICKED' | 'SUBSTITUTED' | 'OUT_OF_STOCK' | 'REFUNDED';
 }
 
 export interface CanonicalOrder {
@@ -51,6 +103,28 @@ export interface CanonicalOrder {
     city: string;
     zipCode: string;
     coordinates?: { latitude: number; longitude: number };
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CanonicalRetailOrder {
+  id: string;
+  merchantId: string;
+  storeId: string;
+  externalOrderId: string;
+  platform: PlatformSource;
+  status: RetailOrderStatus;
+  customer: OrderCustomer;
+  items: RetailOrderItem[];
+  subtotal: number;
+  tax: number;
+  deliveryFee: number;
+  totalAmount: number;
+  deliveryAddress: {
+    street: string;
+    city: string;
+    zipCode: string;
   };
   createdAt: string;
   updatedAt: string;
@@ -108,3 +182,25 @@ export function validateCanonicalOrder(order: CanonicalOrder): CanonicalValidati
 
   return { valid: errors.length === 0, errors };
 }
+
+/** Runtime validation for retail & grocery orders. */
+export function validateCanonicalRetailOrder(order: CanonicalRetailOrder): CanonicalValidationResult {
+  const errors: string[] = [];
+  const requiredText = (value: unknown, path: string) => {
+    if (typeof value !== 'string' || value.trim().length === 0) errors.push(`${path} is required`);
+  };
+
+  requiredText(order.id, 'id');
+  requiredText(order.merchantId, 'merchantId');
+  requiredText(order.storeId, 'storeId');
+  requiredText(order.externalOrderId, 'externalOrderId');
+  if (!Object.values(PlatformSource).includes(order.platform)) errors.push('platform is invalid');
+  if (!Object.values(RetailOrderStatus).includes(order.status)) errors.push('status is invalid');
+
+  if (!Array.isArray(order.items) || order.items.length === 0) {
+    errors.push('items must contain at least one item');
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
