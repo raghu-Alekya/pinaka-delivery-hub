@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import nodemailer, { Transporter } from 'nodemailer';
 
 export interface MockMailMessage {
   id: number;
@@ -12,22 +11,8 @@ export interface MockMailMessage {
 
 @Injectable()
 export class MailService {
-  private readonly transporter?: Transporter;
   private readonly mockMessages: MockMailMessage[] = [];
   private nextMockId = 1;
-
-  constructor() {
-    if (!this.isMockMode() && process.env.SMTP_HOST) {
-      this.transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT) || 587,
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: process.env.SMTP_USER
-          ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
-          : undefined,
-      });
-    }
-  }
 
   isMockMode(): boolean {
     return process.env.MAIL_MODE === 'mock';
@@ -108,16 +93,7 @@ export class MailService {
       return;
     }
 
-    if (!this.transporter) {
-      console.log(`📧 [Mail preview] ${subject} -> ${to}: ${previewLink}`);
-      return;
-    }
-    await this.transporter.sendMail({
-      from: process.env.MAIL_FROM || 'OrderOut <no-reply@example.com>',
-      to,
-      subject,
-      html,
-    });
+    console.log(`📧 [Mail preview] ${subject} -> ${to}: ${previewLink}`);
   }
 
   private escape(value: string): string {

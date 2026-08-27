@@ -155,8 +155,21 @@ export class AppController {
         payload: canonicalOrder,
       };
 
-      const posOrders = await this.createPosTakeawayOrder(canonicalOrder);
       await GlobalOrderEventBus.publish(envelope);
+
+      // Persist the canonical event before attempting the optional synchronous
+      // POS integration. A POS outage or configuration error must not prevent a
+      // valid webhook from reaching RabbitMQ and the order service.
+      let posOrders: Awaited<ReturnType<AppController['createPosTakeawayOrder']>> | undefined;
+      let posError: string | undefined;
+      try {
+        posOrders = await this.createPosTakeawayOrder(canonicalOrder);
+      } catch (error) {
+        posError = this.formatPosError(error);
+        console.warn(
+          `[POS Deferred] Order #${canonicalOrder.externalOrderId} was published successfully; direct POS creation failed: ${posError}`,
+        );
+      }
       await this.aggregatorWebhooks.updateStatus(webhookRecord.id, 'SUCCESS');
 
       return {
@@ -164,6 +177,7 @@ export class AppController {
         connector: connector.descriptor.id,
         orderId: canonicalOrder.id,
         posOrders,
+        posError,
         envelope,
         canonicalOrder,
       };
@@ -286,7 +300,11 @@ export class AppController {
       }
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${JSON.stringify(result)}`);
+        const detail =
+          typeof result?.message === 'string'
+            ? `: ${result.message}`
+            : '';
+        throw new Error(`HTTP ${response.status}${detail}`);
       }
       return result;
     } catch (error) {
@@ -304,5 +322,18 @@ export class AppController {
       response?.data?.order?.id ??
       response?.data?.order?.order_id
     );
+  }
+
+  private formatPosError(error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+    const httpStatus = message.match(/HTTP\s+(\d{3})/i)?.[1];
+    if (httpStatus) return `POS endpoint returned HTTP ${httpStatus}`;
+    if (message.includes('authentication is not configured')) {
+      return 'POS authentication is not configured';
+    }
+    if (message.includes('not a valid JWT')) {
+      return 'POS API token is invalid';
+    }
+    return 'POS order creation failed';
   }
 }

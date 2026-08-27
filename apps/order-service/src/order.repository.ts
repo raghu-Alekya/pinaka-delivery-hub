@@ -107,7 +107,24 @@ export class OrderRepository implements OnModuleInit {
         const saved = await this.orderRepo.save(entity);
         canonical = this.mapToCanonical(saved);
       } catch (err: any) {
-        console.error(`⚠️ DB Save Error: ${err.message}. Falling back to memory.`);
+        // At-least-once delivery can race two attempts past the lookup above.
+        // A unique-key conflict means another attempt already persisted the
+        // order, so return that canonical record instead of creating divergent
+        // in-memory state.
+        if (err?.code === '23505') {
+          const existing = await this.orderRepo.findOne({
+            where: { externalOrderId: payload.externalOrderId },
+          });
+          if (existing) {
+            canonical = this.mapToCanonical(existing);
+            console.log(`♻️ Duplicate order #${payload.externalOrderId} already processed; skipping insert.`);
+          } else {
+            throw err;
+          }
+        } else {
+          console.error(`⚠️ DB Save Error: ${err.message}.`);
+          throw err;
+        }
       }
     } else {
       const existingIdx = this.inMemoryStore.findIndex((o) => o.externalOrderId === payload.externalOrderId);

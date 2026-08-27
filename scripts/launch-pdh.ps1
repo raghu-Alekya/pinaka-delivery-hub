@@ -6,6 +6,14 @@ Write-Host "========================================================" -Foregroun
 Write-Host " LAUNCHING PINAKA DELIVERY HUB SYSTEM INFRASTRUCTURE " -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 
+$WorkspaceRoot = Split-Path -Parent $PSScriptRoot
+$TsxCommand = Join-Path $WorkspaceRoot "node_modules\.bin\tsx.cmd"
+
+if (-not (Test-Path -LiteralPath $TsxCommand)) {
+    Write-Host "tsx is not installed. Run 'pnpm install --frozen-lockfile' first." -ForegroundColor Red
+    exit 1
+}
+
 # 1. Start Docker Infrastructure Containers
 Write-Host ""
 Write-Host "[Step 1/3] Starting Docker Infrastructure Containers..." -ForegroundColor Yellow
@@ -26,21 +34,21 @@ function Start-Microservice {
         [int]$Port
     )
     Write-Host "Booting $Name on Port $Port..." -ForegroundColor Yellow
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "Write-Host 'Booting $Name (Port $Port)...' -ForegroundColor Cyan; $Command"
+    Start-Process powershell -WorkingDirectory $WorkspaceRoot -ArgumentList "-NoExit", "-Command", "Write-Host 'Booting $Name (Port $Port)...' -ForegroundColor Cyan; & '$TsxCommand' $Command"
 }
 
 # 3. Launching application services
-Start-Microservice -Name "Gateway UI" -Command "npx nx serve gateway" -Port 3000
-Start-Microservice -Name "Connector Service" -Command "npx nx serve connector-service" -Port 3001
-Start-Microservice -Name "Order Service" -Command "npx nx serve order-service" -Port 3002
-Start-Microservice -Name "Merchant Service" -Command "npx nx serve merchant-service" -Port 3003
-Start-Microservice -Name "Menu Service" -Command "npx nx serve menu-service" -Port 3004
-Start-Microservice -Name "Inventory Service" -Command "npx nx serve inventory-service" -Port 3005
-Start-Microservice -Name "Analytics Service" -Command "npx nx serve analytics-service" -Port 3006
-Start-Microservice -Name "POS Integration Service" -Command "npx nx serve pos-integration-service" -Port 3007
-Start-Microservice -Name "Notification Service" -Command "npx nx serve notification-service" -Port 3008
-Start-Microservice -Name "Admin API" -Command "npx nx serve admin-api" -Port 3009
-Start-Microservice -Name "Auth Service" -Command "npx nx serve auth-service" -Port 3010
+Start-Microservice -Name "Gateway UI" -Command "'apps/gateway/src/main.ts'" -Port 3000
+Start-Microservice -Name "Connector Service" -Command "'apps/connector-service/src/main.ts'" -Port 3001
+Start-Microservice -Name "Order Service" -Command "'apps/order-service/src/main.ts'" -Port 3002
+Start-Microservice -Name "Merchant Service" -Command "'apps/merchant-service/src/main.ts'" -Port 3003
+Start-Microservice -Name "Menu Service" -Command "'apps/menu-service/src/main.ts'" -Port 3004
+Start-Microservice -Name "Inventory Service" -Command "'apps/inventory-service/src/main.ts'" -Port 3005
+Start-Microservice -Name "Analytics Service" -Command "'apps/analytics-service/src/main.ts'" -Port 3006
+Start-Microservice -Name "POS Integration Service" -Command "'apps/pos-integration-service/src/main.ts'" -Port 3007
+Start-Microservice -Name "Notification Service" -Command "'apps/notification-service/src/main.ts'" -Port 3008
+Start-Microservice -Name "Admin API" -Command "'apps/admin-api/src/main.ts'" -Port 3009
+Start-Microservice -Name "Auth Service" -Command "'apps/auth-service/src/main.ts'" -Port 3010
 
 # 4. Display Final Status Banner
 Start-Sleep -Seconds 3
